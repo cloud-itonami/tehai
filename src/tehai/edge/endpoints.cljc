@@ -99,8 +99,11 @@
   []
   {:status 503
     :body {:ok false :error "no store configured"
-           :hint "bind a durable store, or set TEHAI_STORE=ephemeral for a
-                  non-persisting smoke test"}})
+           ;; One line. A multi-line string literal here leaks the source
+           ;; file's indentation into the JSON body, which the release
+           ;; build made visible the first time this ran for real.
+           :hint (str "bind a durable store, or set TEHAI_STORE=ephemeral"
+                      " for a non-persisting smoke test")}})
 
 (defn draft-invoice-core!
   "`POST /api/invoice/draft`. `caller-did` is already verified.
