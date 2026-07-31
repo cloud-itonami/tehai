@@ -1,0 +1,22 @@
+{:paths ["src"]
+ :deps {io.github.kotoba-lang/langgraph
+        {:git/sha "5b4e5e70837b849b14b6a5800894e3be202ad5fa"}
+        ;; kotoba-lang/psa is this vertical's domain capability library
+        ;; (rate cards, staffing against capacity, margin, utilization,
+        ;; invoice drafting). Referenced by workspace-sibling path per the
+        ;; fleet's capability-library-wrapping convention (same as
+        ;; cloud-itonami-isco-4313 wraps kotoba-lang/labor). It is
+        ;; dependency-free, so it is also consumable as a plain git dep
+        ;; once a fork wants one.
+        io.github.kotoba-lang/psa
+        {:local/root "../../kotoba-lang/psa"}}
+ :aliases
+ {;; clj-kondo from deps (no binary), errors fail CI.
+  :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
+         :main-opts    ["-m" "clj-kondo.main"
+                        "--lint" "src" "test"
+                        "--fail-level" "error"]}
+  :test {:extra-paths ["test"]
+         :extra-deps {io.github.cognitect-labs/test-runner
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+         :main-opts ["-m" "cognitect.test-runner"]}}}

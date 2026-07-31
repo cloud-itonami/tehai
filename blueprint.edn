@@ -1,0 +1,17 @@
+[{:itonami.blueprint/id "tehai"
+  :itonami.blueprint/name "Tehai — professional services automation"
+  ;; No ISIC/ISCO code: like kadou, this is a horizontal capability every
+  ;; sector actor could use, not a sector's own business.
+  :itonami.blueprint/family :horizontal-capability
+  :itonami.blueprint/domain :labor/professional-services
+  :itonami.blueprint/license "AGPL-3.0-or-later"
+  :itonami.blueprint/social-impact [:fair-pay :honest-accounting :small-business-support]
+  :itonami.blueprint/governor :tehai-governor
+  :itonami.blueprint/capability-library "kotoba-lang/psa"
+  :itonami.blueprint/required-technologies [:identity :audit-ledger :dmn]
+  :itonami.blueprint/competes-with
+  {:psa ["Kantata" "BigTime" "Certinia" "Kimble" "NetSuite OpenAir" "Scoro"
+         "Productive" "Accelo" "Deltek Vantagepoint"]}
+  :itonami.blueprint/status :public-oss
+  :itonami.blueprint/maturity :implemented
+  :db/id -1}]
