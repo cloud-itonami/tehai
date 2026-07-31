@@ -9,6 +9,18 @@
     // ABSENT OR EMPTY MEANS 503. The map (not a list) is what stops a
     // signed caller drafting against another client's project before the
     // governor's :project-wrong-client hold ever runs.
-    "TEHAI_CALLER_ALLOWLIST": ""
+    "TEHAI_CALLER_ALLOWLIST": ""    ,
+    // How this deployment stores what it accepts.
+    //
+    //   (unset)     every request is refused with 503 "no store configured"
+    //   ephemeral   an in-process store that does NOT survive the request —
+    //               a smoke test, and every success response carries
+    //               "ephemeral": true so nobody mistakes it for persistence
+    //
+    // Unset is the default ON PURPOSE. An empty in-process store would fail
+    // the governor's registration check and return 409 :no-worker, blaming
+    // the caller for a deployment that has no store at all. A durable
+    // backend is not wired yet; see the repo's CLAUDE.md.
+    "TEHAI_STORE": ""
   }
 }

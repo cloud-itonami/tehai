@@ -21,27 +21,27 @@
     st))
 
 (deftest an-absent-allowlist-serves-503-not-an-open-endpoint
-  (is (= 503 (:status (edge/draft-invoice-core! (seeded) nil "did:key:zAcme"
+  (is (= 503 (:status (edge/draft-invoice-core! (seeded) :ephemeral nil "did:key:zAcme"
                                                 (pr-str {:project "alpha"}))))))
 
 (deftest an-unlisted-caller-is-refused
-  (is (= 403 (:status (edge/draft-invoice-core! (seeded) allowlist "did:key:zMallory"
+  (is (= 403 (:status (edge/draft-invoice-core! (seeded) :ephemeral allowlist "did:key:zMallory"
                                                 (pr-str {:project "alpha"}))))))
 
 (deftest the-client-comes-from-the-did-so-cross-client-drafting-is-blocked
   (testing "zOther is c-2; alpha belongs to c-1"
-    (let [r (edge/draft-invoice-core! (seeded) allowlist "did:key:zOther"
+    (let [r (edge/draft-invoice-core! (seeded) :ephemeral allowlist "did:key:zOther"
                                       (pr-str {:project "alpha"}))]
       (is (= 409 (:status r)))
       (is (some #(= :project-wrong-client (:rule %)) (get-in r [:body :violations]))))))
 
 (deftest a-body-with-no-project-is-400
   (doseq [bad ["" "((" "{}" "{:project \"\"}" "[1 2]"]]
-    (is (= 400 (:status (edge/draft-invoice-core! (seeded) allowlist "did:key:zAcme" bad)))
+    (is (= 400 (:status (edge/draft-invoice-core! (seeded) :ephemeral allowlist "did:key:zAcme" bad)))
         (str "should reject " (pr-str bad)))))
 
 (deftest a-clean-draft-returns-total-lines-and-what-it-could-not-bill
-  (let [r (edge/draft-invoice-core! (seeded) allowlist "did:key:zAcme"
+  (let [r (edge/draft-invoice-core! (seeded) :ephemeral allowlist "did:key:zAcme"
                                     (pr-str {:project "alpha" :invoice-id "inv-1"}))]
     (is (= 200 (:status r)))
     (is (= 240000 (get-in r [:body :total])))
@@ -55,7 +55,7 @@
     (store/register-project! st {:project/id "beta" :project/client "c-1"})
     (store/register-rate-card! st (psa/rate-card "beta" :engineer 10000))   ;; no cost
     (store/register-entry! st (ts "w-1" "2026-01-01" "beta" :engineer 10 :approved? true))
-    (let [r (edge/draft-invoice-core! st allowlist "did:key:zAcme" (pr-str {:project "beta"}))]
+    (let [r (edge/draft-invoice-core! st :ephemeral allowlist "did:key:zAcme" (pr-str {:project "beta"}))]
       (is (= 200 (:status r)))
       (is (= 100000 (get-in r [:body :total])))
       (is (= :unknown (get-in r [:body :margin]))))))
@@ -64,10 +64,10 @@
   (testing "a caller hammering this route produces drafts and nothing else"
     (let [st (seeded)]
       (dotimes [_ 5]
-        (edge/draft-invoice-core! st allowlist "did:key:zAcme" (pr-str {:project "alpha"})))
+        (edge/draft-invoice-core! st :ephemeral allowlist "did:key:zAcme" (pr-str {:project "alpha"})))
       (is (empty? (store/billed-keys st)))
       (is (empty? (store/invoices st)))
-      (is (false? (get-in (edge/draft-invoice-core! st allowlist "did:key:zAcme"
+      (is (false? (get-in (edge/draft-invoice-core! st :ephemeral allowlist "did:key:zAcme"
                                                     (pr-str {:project "alpha"}))
                           [:body :issued]))))))
 
@@ -76,3 +76,33 @@
     (is (contains? publics 'draft-invoice-core!))
     (doseq [absent '[issue-invoice-core! report-margin-core! assign-person-core!]]
       (is (not (contains? publics absent)) (str absent " must not exist")))))
+
+(defn- successful-response []
+  (edge/draft-invoice-core! (seeded) :ephemeral allowlist "did:key:zAcme"
+                            (pr-str {:project "alpha"})))
+
+;; ---------------------------------------------------------------------------
+;; Store configuration — a deployment with no store must not blame the caller
+;; ---------------------------------------------------------------------------
+
+(deftest store-mode-reads-only-values-it-recognises
+  (is (nil? (edge/store-mode {})))
+  (is (nil? (edge/store-mode {"TEHAI_STORE" ""})))
+  (is (= :ephemeral (edge/store-mode {"TEHAI_STORE" "ephemeral"})))
+  (is (= :ephemeral (edge/store-mode {"TEHAI_STORE" "  ephemeral  "})))
+  (testing "a typo in a deployment variable must not silently select a mode"
+    (is (nil? (edge/store-mode {"TEHAI_STORE" "ephemral"})))
+    (is (nil? (edge/store-mode {"TEHAI_STORE" "durable"})))))
+
+(deftest an-unconfigured-store-serves-503-and-says-whose-fault-it-is
+  (let [r (edge/store-unconfigured-response)]
+    (is (= 503 (:status r)))
+    (testing "not a 409 :no-worker — an empty in-process store would fail the
+              governor's registration check and blame the CALLER for a
+              deployment that has no store at all"
+      (is (= "no store configured" (get-in r [:body :error])))
+      (is (re-find #"ephemeral" (get-in r [:body :hint]))))))
+
+(deftest an-ephemeral-store-says-so-in-every-success-response
+  (testing "nobody should mistake a smoke-test deployment for persistence"
+    (is (true? (get-in (successful-response) [:body :ephemeral]))))) 

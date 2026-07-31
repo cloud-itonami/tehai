@@ -40,7 +40,8 @@ committed invoices so there is one source of truth.
 
 The HTTP surface is **one route**: `POST /api/invoice/draft`. Issuing and
 `:report-margin` have no HTTP representation (margin exposes cost rates — the
-firm's own commercial position). An absent allow-list serves **503**.
+firm's own commercial position). An absent allow-list serves **503**. An unset `TEHAI_STORE` serves **503** too — refusing beats
+returning `:no-worker` and blaming the caller for a storeless deployment.
 
 ## Test
 
