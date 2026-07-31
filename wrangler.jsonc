@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cloud-itonami-tehai",
+  "pages_build_output_dir": "public",
+  "compatibility_date": "2026-07-31",
+  "vars": {
+    // DID -> client id, comma separated.
+    //
+    // ABSENT OR EMPTY MEANS 503. The map (not a list) is what stops a
+    // signed caller drafting against another client's project before the
+    // governor's :project-wrong-client hold ever runs.
+    "TEHAI_CALLER_ALLOWLIST": ""
+  }
+}

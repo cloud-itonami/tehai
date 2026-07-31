@@ -1,0 +1,10 @@
+{
+  "name": "cloud-itonami-tehai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build-edge": "npx shadow-cljs release edge-api",
+    "deploy": "wrangler pages deploy public --project-name=cloud-itonami-tehai"
+  },
+  "devDependencies": { "shadow-cljs": "^2.28.0" }
+}

@@ -95,10 +95,41 @@ with the client.
 |---|---|
 | Role | actor (advisor ⊣ governor ⊣ ledger) |
 | Capability library | `kotoba-lang/psa` (sibling path) |
-| Tests | 22 tests, 62 assertions, all green |
-| Store | `MemStore` only — no Datomic/kotoba-server backend yet |
-| Deployment | none — no endpoint, no scheduled loop |
-| Not covered | expenses, subcontractors, revenue recognition, multi-currency |
+| Tests | 40 tests, 128 assertions, all green |
+| Store | `MemStore` + `DatomicStore` (langchain.db), proved interchangeable by a contract test |
+| Deployment | Cloudflare Pages Functions — `POST /api/invoice/draft`, CACAO + allow-list gated |
+| Not covered | time-off, resource forecasting, project accounting beyond margin |
+
+## Store backends
+
+`MemStore` and `DatomicStore` (`langchain.db`) implement the same protocol and
+pass the same contract test. The billed set is why that matters most here: a
+firm that restarts its actor and loses which hours were already invoiced has
+lost the only thing making `:double-billing` a hard hold. `DatomicStore` derives
+it from the committed invoices themselves, so there is one source of truth and
+no way for the two to drift.
+
+The contract test caught a real divergence on the way in — `MemStore` was
+`conj`ing rate cards, so re-registering a rate left two live cards for one
+`[project role]` and an invoice total silently depended on insertion order.
+Both stores now key by identity.
+
+## HTTP surface
+
+One route, permanently: `POST /api/invoice/draft`. Drafting is safe to expose
+precisely because a draft is not a commitment — only `:issue-invoice` adds entry
+keys to the billed set, so a caller hammering this route produces drafts and
+never bills an hour. **Issuing has no HTTP representation at all**: an invoice
+reaches a client because a person resumed the thread, and no request substitutes
+for that. `:report-margin` is withheld separately — margin exposes cost rates,
+which is the firm's own commercial position and one credential away from being a
+competitor's.
+
+Two gates: CACAO signature and temporal window (`cacao.edge.verify`, shared, not
+reimplemented), then an allow-list mapping **DID → client id**, which is what
+stops a signed caller drafting against another client's project before the
+governor's `:project-wrong-client` hold ever runs. **An absent allow-list serves
+503, never an open endpoint.**
 
 ## Test
 

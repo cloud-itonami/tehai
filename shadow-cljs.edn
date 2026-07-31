@@ -1,0 +1,11 @@
+;; Edge build for the Cloudflare Pages Function surface — mirrors
+;; cloud-itonami-isic-6492's :edge-api build.
+;; REBUILD: `npx shadow-cljs release edge-api` — NOT `compile`.
+{:deps {:aliases [:cljs]}
+ :builds
+ {:edge-api
+  {:target :esm
+   :output-dir "functions/edge"
+   :modules {:tehai-edge-core
+             {:exports {draftOnRequestPost tehai.edge.endpoints/on-request-post-draft}}}
+   :compiler-options {:output-feature-set :es2020 :infer-externs :auto}}}}

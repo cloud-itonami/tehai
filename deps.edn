@@ -9,13 +9,24 @@
         ;; dependency-free, so it is also consumable as a plain git dep
         ;; once a fork wants one.
         io.github.kotoba-lang/psa
-        {:local/root "../../kotoba-lang/psa"}}
+        {:local/root "../../kotoba-lang/psa"}
+        ;; shared langchain.db store seam (EDN-blob codec + identity
+        ;; schema + seq-keyed event streams) — ADR-2607141600.
+        io.github.kotoba-lang/langchain-store
+        {:local/root "../../kotoba-lang/langchain-store"}
+        ;; CACAO verification for the edge. Depended on, never
+        ;; reimplemented (ADR-2607268000).
+        io.github.kotoba-lang/org-chainagnostic-cacao
+        {:git/url "https://github.com/kotoba-lang/org-chainagnostic-cacao.git"
+         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}}
  :aliases
  {;; clj-kondo from deps (no binary), errors fail CI.
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
          :main-opts    ["-m" "clj-kondo.main"
                         "--lint" "src" "test"
                         "--fail-level" "error"]}
+  ;; the :cljs branch of the edge ns (shadow-cljs reads :aliases [:cljs])
+  :cljs {:extra-deps {org.clojure/clojurescript {:mvn/version "1.11.132"}}}
   :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
