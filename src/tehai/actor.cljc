@@ -80,6 +80,14 @@
                           :invoice/entries (:entry-keys proposal)}))
                       (when (= :assign-person (:op proposal))
                         (store/commit-assignment! store (:assignment proposal)))
+                      ;; Recording a cost is never gated on whether its
+                      ;; currency can be converted — the cost was incurred
+                      ;; either way, and refusing to record it would erase
+                      ;; it. The convertibility gate lives on :issue-invoice.
+                      (when (= :record-expense (:op proposal))
+                        (store/record-expense! store (:expense proposal)))
+                      (when (= :record-subcontract (:op proposal))
+                        (store/record-subcontract! store (:subcontract proposal)))
                       (store/commit-record! store record)
                       (store/append-ledger! store {:disposition :commit :record record})
                       {:record record

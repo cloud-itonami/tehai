@@ -56,6 +56,48 @@ a project's profitability will happily return revenue when cost data is missing,
 because that is what the numbers look like. `kotoba.psa/margin` returns
 `:unknown` in that case and the governor holds any proposal that says otherwise.
 
+## Costs, currency and revenue
+
+Seven ops, not four. `kotoba-lang/psa` grew expenses, subcontractors, revenue
+recognition and multi-currency; these are the ones tehai now governs.
+
+```clojure
+(actor/run-request! g {:client-id "c-1" :op :record-expense :project "alpha"
+                       :expense (psa/expense "e-1" "alpha" 50000 "JPY" :billable? true)} {} "t-1")
+(actor/run-request! g {:client-id "c-1" :op :record-subcontract :project "alpha"
+                       :subcontract sub} {} "t-2")
+(actor/run-request! g {:client-id "c-1" :op :recognize-revenue :project "alpha"} {} "t-3")
+```
+
+**Recording a cost is never gated on convertibility.** A JPY expense records even
+with no JPY→USD rate on file: the cost was incurred either way, and refusing to
+record it would erase it. That is the same shape as kintai refusing to gate punch
+recording on lawfulness — the gate belongs downstream, not on the evidence.
+
+### An incomplete total may not be issued
+
+`:incomplete-total` is a **hold with no approval route**. If a billable expense
+or a subcontractor line is in a currency the store cannot convert into the
+project's billing currency, the total is wrong by an unknown factor — and
+approving it means signing a number nobody can check.
+
+```clojure
+;; billable JPY expense, no JPY→USD rate
+;; => :hold, :incomplete-total, listing [[:expense "e-1"]]
+(governor/total-completeness st "alpha")
+;; => {:complete? false :unconvertible [[:expense "e-1"]] :currency "USD"}
+```
+
+No approval makes an unconverted currency converted, so unlike `:issue-invoice`'s
+ordinary escalation this one does not reach a human at all. Drafting is *not*
+blocked — a draft is not a commitment. Two rate cards in different currencies
+also block issuing (`:ambiguous-invoice-currency`): there is no single answer to
+what the invoice is denominated in.
+
+`:report-margin` now uses `psa/project-margin`, so labour, expenses and
+subcontractors are each visible instead of only the net. Invariant 2 is
+unchanged — one uncosted labour entry and the whole figure is still `:unknown`.
+
 ## Operations
 
 ```clojure
@@ -95,10 +137,10 @@ with the client.
 |---|---|
 | Role | actor (advisor ⊣ governor ⊣ ledger) |
 | Capability library | `kotoba-lang/psa` (sibling path) |
-| Tests | 40 tests, 128 assertions, all green |
+| Tests | 58 tests, 171 assertions, all green |
 | Store | `MemStore` + `DatomicStore` (langchain.db), proved interchangeable by a contract test |
 | Deployment | Cloudflare Pages Functions — `POST /api/invoice/draft`, CACAO + allow-list gated |
-| Not covered | time-off, resource forecasting, project accounting beyond margin |
+| Not covered | time-off, resource forecasting, project accounting beyond margin and recognition |
 
 ## Store backends
 

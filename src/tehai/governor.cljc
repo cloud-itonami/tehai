@@ -31,7 +31,18 @@
                              cost data reads as profit, so a number
                              invented here is a number that looks like
                              good news.
-    9. over-allocation     — an assignment may not push a person past
+    9a. incomplete total   — an invoice may not be ISSUED when one of its
+                             components could not be converted into the
+                             project's billing currency. The total would
+                             be wrong by an unknown factor, and approving
+                             it means signing a number nobody can check —
+                             so there is no approval route, the same way
+                             there is none around an unpriced rate.
+                             Recording the underlying expense is NOT
+                             gated on this: the cost was incurred either
+                             way, and refusing to record it would erase
+                             it. The gate belongs on the invoice.
+   9. over-allocation     — an assignment may not push a person past
                              declared capacity. Undeclared capacity is
                              NOT a violation (there is nothing to
                              exceed), which is why 9 and 4 differ:
@@ -52,6 +63,40 @@
   (let [wanted (set entry-keys)
         mine (filter #(contains? wanted (psa/entry-key %)) (store/entries store))]
     (psa/invoice :redraft project mine (store/rate-cards store) (store/billed-keys store))))
+
+(defn- invoice-currency
+  "The currency an invoice is denominated in: the project's rate cards
+  agree on one, or nil when they do not."
+  [store project]
+  (let [cs (into #{} (comp (filter #(= project (:rate/project %))) (map :rate/currency))
+                 (store/rate-cards store))]
+    (when (= 1 (count cs)) (first cs))))
+
+(defn total-completeness
+  "Can every component of this invoice be expressed in one currency?
+
+  Billable expenses and subcontractor lines may be incurred in a currency
+  other than the one the project bills in. `kotoba.psa/total-in` converts
+  what it can and NAMES what it cannot; this asks whether anything was
+  left out.
+
+  Returns `{:complete? bool :unconvertible [...] :currency c}`."
+  [store project]
+  (let [ccy (invoice-currency store project)
+        items (concat
+               (for [e (store/expenses store)
+                     :when (and (= project (:expense/project e)) (:expense/billable? e))]
+                 {:amount (psa/expense-billable-amount e) :currency (:expense/currency e)
+                  :source [:expense (:expense/id e)]})
+               (for [x (store/subcontracts store) :when (= project (:sub/project x))]
+                 {:amount (:sub/billable (psa/subcontract-margin x)) :currency (:sub/currency x)
+                  :source [:subcontract (:sub/id x)]}))]
+    (if (nil? ccy)
+      {:complete? false :unconvertible [] :currency nil :reason :ambiguous-invoice-currency}
+      (let [t (psa/total-in (store/fx-rates store) items ccy)]
+        {:complete? (:total/complete? t)
+         :unconvertible (mapv :source (:total/unconvertible t))
+         :currency ccy}))))
 
 (defn- hard-violations [request proposal store]
   (let [{:keys [op effect project entry-keys total margin assignment]} proposal
@@ -112,6 +157,27 @@
       (conj {:rule :fabricated-margin
              :detail (str "margin " margin " を主張しているが、cost rate 欠落 "
                           (:margin/uncosted-count recomputed-margin) " 件で :unknown")})
+
+      ;; ---- an incomplete total may not be issued ----
+      ;;
+      ;; A total that could not price one of its components is wrong by
+      ;; an unknown factor. Approving it means signing a number nobody
+      ;; can check, so this is a HOLD and not an escalation: there is no
+      ;; approval that makes an unconverted currency converted.
+      (and (= :issue-invoice op) project
+           (not (:complete? (total-completeness store project))))
+      (conj (let [c (total-completeness store project)]
+              {:rule :incomplete-total
+               :detail (if (= :ambiguous-invoice-currency (:reason c))
+                         "project の rate card が単一通貨に定まらない"
+                         (str "換算できない component: " (pr-str (:unconvertible c))
+                              "（未知の係数だけ間違った金額に署名させることになる）"))}))
+
+      ;; ---- an expense or subcontract belongs to a real project ----
+      (and (contains? #{:record-expense :record-subcontract} op)
+           (nil? project-record))
+      (conj {:rule :unknown-project
+             :detail "費用の付け先 project が未登録"})
 
       (and alloc (:allocation/over? alloc))
       (conj {:rule :over-allocation

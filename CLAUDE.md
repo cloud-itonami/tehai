@@ -19,6 +19,18 @@ Deliberately *not* a hold: assigning against **undeclared capacity**. Absent
 capacity is unknown, not exceeded. If that becomes a problem, require capacity at
 registration — do not invent a limit.
 
+## Costs, currency and revenue
+
+**Recording a cost is never gated on convertibility.** A foreign-currency expense
+records even with no FX rate on file — the cost was incurred either way, and
+refusing to record it erases it. Do not move that gate onto `:record-expense`.
+
+**`:incomplete-total` is a hold with no approval route.** If any billable
+component cannot be converted into the project's billing currency, the total is
+wrong by an unknown factor and approving it means signing a number nobody can
+check. No approval makes an unconverted currency converted. Drafting is
+deliberately not blocked — a draft is not a commitment.
+
 ## Drafting is not issuing
 
 Only `:issue-invoice` touches the billed set, and it **always** escalates. A

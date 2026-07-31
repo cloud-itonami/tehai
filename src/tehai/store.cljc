@@ -20,6 +20,15 @@
     assignment — a `kotoba.psa/assignment`, written ONLY via commit.
     entry      — a `:ts/*` timesheet entry. `:ts/approved?` gates
                  invoicing: unapproved time is not billable time.
+    expense    — a `kotoba.psa/expense`. Recording one is NEVER gated on
+                 whether its currency can be converted: the cost was
+                 incurred either way, and refusing to record it would
+                 erase it. The gate belongs on the invoice.
+    subcontract — a `kotoba.psa/subcontract`, carrying both the cost and
+                 the bill rate explicitly.
+    fx-rate    — a `kotoba.psa/fx-rate`. Directional; never inverted.
+    revenue-contract — a `kotoba.psa/contract` (:as-delivered /
+                 :percent-complete / :on-completion), one per project.
     invoice    — a committed invoice. Its entry keys join the billed set
                  permanently, which is what makes double-billing
                  detectable rather than merely unlikely.
@@ -35,6 +44,10 @@
   (person [s person-id])
   (rate-cards [s])
   (capacities [s])
+  (expenses [s])
+  (subcontracts [s])
+  (fx-rates [s])
+  (revenue-contract [s project-id])
   (assignments [s])
   (entries [s])
   (billed-keys [s])
@@ -46,6 +59,10 @@
   (register-person! [s p])
   (register-rate-card! [s card])
   (register-capacity! [s cap])
+  (record-expense! [s e])
+  (record-subcontract! [s x])
+  (register-fx-rate! [s r])
+  (register-revenue-contract! [s c])
   (register-entry! [s entry])
   (commit-assignment! [s a])
   (commit-invoice! [s inv])
@@ -65,6 +82,10 @@
   ;; insertion order. Found by the MemStore ≡ DatomicStore contract test.
   (rate-cards [_] (vec (vals (:rate-cards @a))))
   (capacities [_] (vec (vals (:capacities @a))))
+  (expenses [_] (vec (vals (:expenses @a))))
+  (subcontracts [_] (vec (vals (:subcontracts @a))))
+  (fx-rates [_] (vec (vals (:fx-rates @a))))
+  (revenue-contract [_ project-id] (get-in @a [:revenue-contracts project-id]))
   (assignments [_] (:assignments @a))
   (entries [_] (vec (vals (:entries @a))))
   (billed-keys [_] (:billed @a))
@@ -85,6 +106,12 @@
     (swap! a assoc-in [:entries [(:ts/worker entry) (:ts/date entry)
                                  (:ts/project entry) (:ts/role entry)]]
            entry) s)
+  (record-expense! [s e] (swap! a assoc-in [:expenses (:expense/id e)] e) s)
+  (record-subcontract! [s x] (swap! a assoc-in [:subcontracts (:sub/id x)] x) s)
+  (register-fx-rate! [s r]
+    (swap! a assoc-in [:fx-rates [(:fx/from r) (:fx/to r)]] r) s)
+  (register-revenue-contract! [s c]
+    (swap! a assoc-in [:revenue-contracts (:contract/project c)] c) s)
   (commit-assignment! [s x] (swap! a update :assignments conj x) s)
   (commit-invoice! [s inv]
     (swap! a #(-> %
@@ -98,6 +125,8 @@
   ([] (mem-store {}))
   ([seed] (->MemStore (atom (merge {:clients {} :projects {} :people {}
                                     :rate-cards {} :capacities {} :assignments []
+                                    :expenses {} :subcontracts {} :fx-rates {}
+                                    :revenue-contracts {}
                                     :entries {} :invoices [] :billed #{}
                                     :records [] :ledger []}
                                    seed)))))
@@ -123,6 +152,7 @@
 (def ^:private schema
   (ls/identity-schema [:client/id :project/id :person/id
                        :rate/key :capacity/key :entry/key
+                       :expense/id :sub/id :fx/key :contract/project
                        :assignment/id :invoice/id :record/seq :ledger/seq]))
 
 (defn- blobs [conn id-attr edn-attr]
@@ -147,6 +177,13 @@
                     :where [?e :person/id ?id] [?e :person/edn ?v]] (d/db conn) id)))
   (rate-cards [_] (blobs conn :rate/key :rate/edn))
   (capacities [_] (blobs conn :capacity/key :capacity/edn))
+  (expenses [_] (blobs conn :expense/id :expense/edn))
+  (subcontracts [_] (blobs conn :sub/id :sub/edn))
+  (fx-rates [_] (blobs conn :fx/key :fx/edn))
+  (revenue-contract [_ project-id]
+    (ls/dec* (d/q '[:find ?v . :in $ ?p
+                    :where [?e :contract/project ?p] [?e :contract/edn ?v]]
+                  (d/db conn) project-id)))
   (assignments [_] (blobs conn :assignment/id :assignment/edn))
   (entries [_] (blobs conn :entry/key :entry/edn))
   (billed-keys [s]
@@ -182,6 +219,16 @@
     (d/transact! conn [{:entry/key (pr-str [(:ts/worker entry) (:ts/date entry)
                                             (:ts/project entry) (:ts/role entry)])
                         :entry/edn (ls/enc entry)}]) s)
+  (record-expense! [s e]
+    (d/transact! conn [{:expense/id (:expense/id e) :expense/edn (ls/enc e)}]) s)
+  (record-subcontract! [s x]
+    (d/transact! conn [{:sub/id (:sub/id x) :sub/edn (ls/enc x)}]) s)
+  (register-fx-rate! [s r]
+    (d/transact! conn [{:fx/key (pr-str [(:fx/from r) (:fx/to r)])
+                        :fx/edn (ls/enc r)}]) s)
+  (register-revenue-contract! [s c]
+    (d/transact! conn [{:contract/project (:contract/project c)
+                        :contract/edn (ls/enc c)}]) s)
   (commit-assignment! [s x]
     (d/transact! conn [{:assignment/id (:assign/id x) :assignment/edn (ls/enc x)}]) s)
   (commit-invoice! [s inv]

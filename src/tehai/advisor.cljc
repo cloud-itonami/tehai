@@ -9,6 +9,7 @@
 
   A proposal is a map:
     {:op :draft-invoice|:issue-invoice|:assign-person|:report-margin
+        |:record-expense|:record-subcontract|:recognize-revenue
      :effect :propose
      :project str
      :entry-keys [[worker date project role] ...]
@@ -67,9 +68,32 @@
              :assignment (:assignment request))
 
       :report-margin
+      ;; project-margin, not margin: labour is only one of three places
+      ;; the money goes. Invariant 2 is unchanged — one uncosted labour
+      ;; entry and the whole figure is still :unknown — but the expense
+      ;; and subcontract sides are now visible instead of missing.
       (let [items (filter #(= project (:ts/project %)) (store/entries store))
-            m (psa/margin (map #(psa/price-entry (store/rate-cards store) %) items))]
+            m (psa/project-margin
+               (map #(psa/price-entry (store/rate-cards store) %) items)
+               (filterv #(= project (:expense/project %)) (store/expenses store))
+               (filterv #(= project (:sub/project %)) (store/subcontracts store)))]
         (assoc base :project project :margin (:margin/amount m) :margin-detail m))
+
+      :record-expense
+      (assoc base :project project :expense (:expense request))
+
+      :record-subcontract
+      (assoc base :project project :subcontract (:subcontract request))
+
+      :recognize-revenue
+      (let [c (store/revenue-contract store project)
+            items (filter #(= project (:ts/project %)) (store/entries store))
+            priced (map #(psa/price-entry (store/rate-cards store) %) items)]
+        (assoc base :project project
+               :revenue (when c (psa/recognize c priced (boolean (:complete? request))))
+               :rationale (if c
+                            (str "recognised under " (name (:contract/method c)))
+                            "no revenue contract registered for this project")))
 
       base)))
 
