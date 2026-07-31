@@ -8,7 +8,8 @@
   (:require [clojure.test :refer [deftest is testing]]
             [kotoba.psa :as psa]
             [tehai.store :as store]
-            [tehai.actor :as actor]))
+            [tehai.actor :as actor]
+            [tehai.governor :as governor]))
 
 (def ^:private day 86400000)
 (def ^:private t0 1767225600000)
@@ -147,4 +148,114 @@
     (is (= (run store/mem-store) (run store/datomic-store)))
     (testing "and the shared answer is that the hours are billed exactly once"
       (is (= {:billed 2 :invoices 1 :second-total 0 :ledger [:commit]}
+             (run store/datomic-store))))))
+
+;; ---------------------------------------------------------------------------
+;; Expenses, subcontractors, FX rates and revenue contracts
+;;
+;; Added in the iteration that gave tehai its cost and currency ops.
+;; These store methods went in without contract coverage.
+;; ---------------------------------------------------------------------------
+
+(deftest an-expense-round-trips-with-its-billable-flag-and-markup
+  (each-backend
+   (fn [st]
+     (let [e (psa/expense "e-1" "alpha" 20000 "USD" :billable? true :markup 0.1
+                          :category :travel :incurred-by "w-1")]
+       (store/record-expense! st e)
+       (let [back (first (store/expenses st))]
+         (is (= e back))
+         (testing "the flag that decides whether a client pays survives the blob"
+           (is (true? (:expense/billable? back)))
+           (is (= 22000.0 (psa/expense-billable-amount back)))))))))
+
+(deftest a-non-billable-expense-stays-non-billable-across-the-round-trip
+  (testing "false is a value, not an absence — a flag that read back as nil
+            would silently start billing the client for absorbed costs"
+    (each-backend
+     (fn [st]
+       (store/record-expense! st (psa/expense "e-1" "alpha" 20000 "USD" :billable? false))
+       (let [back (first (store/expenses st))]
+         (is (false? (:expense/billable? back)))
+         (is (zero? (psa/expense-billable-amount back))))))))
+
+(deftest re-recording-an-expense-id-replaces-it
+  (each-backend
+   (fn [st]
+     (store/record-expense! st (psa/expense "e-1" "alpha" 20000 "USD" :billable? true))
+     (store/record-expense! st (psa/expense "e-1" "alpha" 30000 "USD" :billable? true))
+     (is (= 1 (count (store/expenses st))))
+     (is (= 30000 (:expense/amount (first (store/expenses st))))))))
+
+(deftest a-subcontract-round-trips-with-both-rates
+  (each-backend
+   (fn [st]
+     (let [x (psa/subcontract "s-1" "alpha" "vendor-a" :engineer 10 8000 14000 "USD")]
+       (store/record-subcontract! st x)
+       (let [back (first (store/subcontracts st))]
+         (is (= x back))
+         (testing "cost and bill rate are separate negotiations and must both survive"
+           (is (= 80000 (:sub/cost (psa/subcontract-margin back))))
+           (is (= 140000 (:sub/billable (psa/subcontract-margin back))))))))))
+
+(deftest an-fx-rate-round-trips-and-stays-directional
+  (each-backend
+   (fn [st]
+     (store/register-fx-rate! st (psa/fx-rate "EUR" "USD" 1.08 "2026-01-01"))
+     (let [rates (store/fx-rates st)]
+       (is (= 1080.0 (:money/amount (psa/convert rates 1000 "EUR" "USD"))))
+       (testing "the reverse direction is still absent — storing one rate must
+                 not manufacture its inverse"
+         (is (:money/unconvertible? (psa/convert rates 1000 "USD" "EUR"))))))))
+
+(deftest re-registering-an-fx-pair-replaces-it
+  (testing "two live rates for one pair would make an invoice total depend on
+            which one psa/convert happened to see first"
+    (each-backend
+     (fn [st]
+       (store/register-fx-rate! st (psa/fx-rate "EUR" "USD" 1.08 "2026-01-01"))
+       (store/register-fx-rate! st (psa/fx-rate "EUR" "USD" 1.12 "2026-02-01"))
+       (is (= 1 (count (store/fx-rates st))))
+       (is (= 1120.0 (:money/amount (psa/convert (store/fx-rates st) 1000 "EUR" "USD"))))))))
+
+(deftest a-revenue-contract-round-trips-and-is-scoped-to-its-project
+  (each-backend
+   (fn [st]
+     (store/register-revenue-contract!
+      st (psa/contract "alpha" :percent-complete :fee 1000000 :budget-hours 100))
+     (let [c (store/revenue-contract st "alpha")]
+       (is (= :percent-complete (:contract/method c)))
+       (is (= 100 (:contract/budget-hours c))))
+     (is (nil? (store/revenue-contract st "beta"))))))
+
+(deftest re-registering-a-projects-contract-replaces-it
+  (each-backend
+   (fn [st]
+     (store/register-revenue-contract! st (psa/contract "alpha" :on-completion :fee 500000))
+     (store/register-revenue-contract!
+      st (psa/contract "alpha" :percent-complete :fee 1000000 :budget-hours 100))
+     (is (= :percent-complete (:contract/method (store/revenue-contract st "alpha")))))))
+
+(deftest an-empty-store-answers-empty-for-the-new-collections
+  (doseq [[label make] backends]
+    (let [st (make)]
+      (testing (str "backend " label)
+        (is (empty? (store/expenses st)))
+        (is (empty? (store/subcontracts st)))
+        (is (empty? (store/fx-rates st)))
+        (is (nil? (store/revenue-contract st "alpha")))))))
+
+(deftest the-incomplete-total-hold-fires-identically-on-both-backends
+  (testing "the rule with no approval route must not depend on which store
+            the deployment happens to run"
+    (let [run (fn [make]
+                (let [st (seeded make)
+                      _ (store/record-expense!
+                         st (psa/expense "e-1" "alpha" 50000 "JPY" :billable? true))
+                      c (governor/total-completeness st "alpha")]
+                  {:complete? (:complete? c)
+                   :unconvertible (:unconvertible c)
+                   :currency (:currency c)}))]
+      (is (= (run store/mem-store) (run store/datomic-store)))
+      (is (= {:complete? false :unconvertible [[:expense "e-1"]] :currency "USD"}
              (run store/datomic-store))))))
