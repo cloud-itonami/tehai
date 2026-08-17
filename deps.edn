@@ -18,7 +18,11 @@
         ;; reimplemented (ADR-2607268000).
         io.github.kotoba-lang/org-chainagnostic-cacao
         {:git/url "https://github.com/kotoba-lang/org-chainagnostic-cacao.git"
-         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}}
+         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}
+        ;; the itonami actor pattern's governor layer, written once.
+        io.github.kotoba-lang/governor
+        {:git/url "https://github.com/kotoba-lang/governor.git"
+         :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}}
  :aliases
  {;; clj-kondo from deps (no binary), errors fail CI.
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}

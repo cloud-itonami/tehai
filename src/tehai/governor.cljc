@@ -52,7 +52,8 @@
    10. :op :issue-invoice  — money leaves the system.
    11. low confidence (< `confidence-floor`)."
   (:require [kotoba.psa :as psa]
-            [tehai.store :as store]))
+            [tehai.store :as store]
+            [governor.core :as gov]))
 
 (def confidence-floor 0.6)
 (def ^:private escalating-ops #{:issue-invoice})
@@ -120,21 +121,27 @@
                                 (store/capacities store)
                                 (:assign/person assignment)
                                 [(:assign/from assignment) (:assign/to assignment)]))]
-    (cond-> []
-      (nil? client-record)
-      (conj {:rule :no-client :detail "未登録 client"})
+    (gov/violations
+     ;; --- the fleet's four, from kotoba-lang/governor --------------------
+     (gov/missing-subject client-record {:detail "未登録 client"})
+     (gov/no-actuation {:effect effect}
+                       {:detail "effect は :propose のみ許可（直接書込禁止）"})
+     (gov/unknown-scope project-record
+                        {:applies? (boolean project)
+                         :rule :unknown-project
+                         :detail (str "未登録 project: " project)})
+     ;; a psa project carries ownership as :project/client, the request as
+     ;; :client-id — the shape that made governor grow :scope-key.
+     (gov/scope-owner-mismatch project-record {:client-id client-id}
+                               {:owner-key :client-id
+                                :scope-key :project/client
+                                :rule :project-wrong-client
+                                :detail (str "project " project " は client "
+                                             (:project/client project-record)
+                                             " のもの（" client-id " ではない）")})
 
-      (not= :propose effect)
-      (conj {:rule :no-actuation :detail "effect は :propose のみ許可（直接書込禁止）"})
-
-      (and project (nil? project-record))
-      (conj {:rule :unknown-project :detail (str "未登録 project: " project)})
-
-      (and project-record (not= (:project/client project-record) client-id))
-      (conj {:rule :project-wrong-client
-             :detail (str "project " project " は client " (:project/client project-record)
-                          " のもの（" client-id " ではない）")})
-
+     ;; --- tehai's own -----------------------------------------------------
+     (cond-> []
       (seq unpriced)
       (conj {:rule :unpriced-time
              :detail (str (count unpriced) " 件が rate card 無し。0 でも既定単価でもなく hold")})
@@ -183,7 +190,7 @@
       (conj {:rule :over-allocation
              :detail (str (:allocation/person alloc) " は "
                           (:allocation/committed-hours alloc) "h 割当だが capacity は "
-                          (:allocation/capacity-hours alloc) "h")}))))
+                          (:allocation/capacity-hours alloc) "h")})))))
 
 (defn check
   "Assess a proposal against `request`/`context`/`proposal` and a `store`
@@ -191,13 +198,7 @@
   Returns
   `{:ok? bool :violations [...] :confidence n :hard? bool :escalate? bool}`."
   [request _context proposal store]
-  (let [hard      (hard-violations request proposal store)
-        hard?     (boolean (seq hard))
-        conf      (or (:confidence proposal) 0.0)
-        low?      (< conf confidence-floor)
-        risky-op? (contains? escalating-ops (:op proposal))]
-    {:ok?        (and (not hard?) (not low?) (not risky-op?))
-     :violations hard
-     :confidence conf
-     :hard?      hard?
-     :escalate?  (and (not hard?) (or low? risky-op?))}))
+  (gov/verdict {:violations (hard-violations request proposal store)
+                :confidence (:confidence proposal)
+                :escalating-op? (contains? escalating-ops (:op proposal))
+                :confidence-floor confidence-floor}))
