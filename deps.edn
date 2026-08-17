@@ -9,11 +9,13 @@
         ;; dependency-free, so it is also consumable as a plain git dep
         ;; once a fork wants one.
         io.github.kotoba-lang/psa
-        {:local/root "../../kotoba-lang/psa"}
+        {:git/url "https://github.com/kotoba-lang/psa.git"
+         :git/sha "f9c96f337abd45ee025d58d6549d985c32fd1dfa"}
         ;; shared langchain.db store seam (EDN-blob codec + identity
         ;; schema + seq-keyed event streams) — ADR-2607141600.
         io.github.kotoba-lang/langchain-store
-        {:local/root "../../kotoba-lang/langchain-store"}
+        {:git/url "https://github.com/kotoba-lang/langchain-store.git"
+         :git/sha "b986669f72276568c97e1fa5b331a5ff3017bf69"}
         ;; CACAO verification for the edge. Depended on, never
         ;; reimplemented (ADR-2607268000).
         io.github.kotoba-lang/org-chainagnostic-cacao
@@ -24,7 +26,8 @@
         {:git/url "https://github.com/kotoba-lang/governor.git"
          :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}
         io.github.kotoba-lang/taxlaw
-        {:local/root "../../kotoba-lang/taxlaw"}}
+        {:git/url "https://github.com/kotoba-lang/taxlaw.git"
+         :git/sha "718b09ea4fd608dc3a12d0baaa095588046a2e5c"}}
  :aliases
  {;; clj-kondo from deps (no binary), errors fail CI.
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
