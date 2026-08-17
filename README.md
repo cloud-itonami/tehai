@@ -19,6 +19,25 @@ Domain arithmetic lives in [`kotoba-lang/psa`](https://github.com/kotoba-lang/ps
 — rate cards, proration, margin, utilization, invoice drafting, all pure `.cljc`.
 This repo is the governed shell around it.
 
+## The shared governor layer
+
+`:no-client`, `:no-actuation`, `:unknown-project` and `:project-wrong-client`
+are not PSA rules — every actor in this fleet has them, and they were
+hand-copied into 376 governors, one of which silently drifted into reporting
+a HARD violation as escalatable. They now come from
+[`kotoba-lang/governor`](https://github.com/kotoba-lang/governor), along
+with the verdict assembly. `:project-wrong-client` uses that library's
+`:scope-key`, because a psa project carries ownership as `:project/client`
+while the request carries `:client-id`.
+
+`test/tehai/conformance_test.clj` pins every disposition against
+`gov/conformance-failures`. Unlike its sibling actors, tehai's existing
+suite **already** caught the drift in two tests
+(`a-hard-violation-outranks-escalation`,
+`an-unconvertible-billable-expense-blocks-issuing`) — measured by
+re-injecting it. The conformance suite widens that from two incidental
+cases to every disposition, deliberately.
+
 ## What the governor refuses
 
 | | HARD hold — never overridable |
