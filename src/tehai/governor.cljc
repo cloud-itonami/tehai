@@ -53,6 +53,7 @@
    11. low confidence (< `confidence-floor`)."
   (:require [kotoba.psa :as psa]
             [tehai.store :as store]
+            [kotoba.taxlaw :as taxlaw]
             [governor.core :as gov]))
 
 (def confidence-floor 0.6)
@@ -116,6 +117,15 @@
         draft (when (and invoicing? project) (redraft store project entry-keys))
         recomputed-margin (when invoicing?
                             (psa/margin (map #(psa/price-entry (store/rate-cards store) %) cited)))
+        ;; インボイス制度, issuing side. 4311 checks the RECEIVING side (may
+        ;; this entry claim 仕入税額控除); this is the other half: is the
+        ;; invoice we are about to send something its recipient could
+        ;; credit at all? The jurisdiction that decides is the CLIENT's,
+        ;; because the client is who would claim the credit.
+        tax (when (and invoicing? (:client/jurisdiction client-record))
+              (taxlaw/credit-support
+               (:client/jurisdiction client-record)
+               {:registration-number (:issuer-registration-number proposal)}))
         alloc (when (= :assign-person op)
                 (psa/allocation (conj (vec (store/assignments store)) assignment)
                                 (store/capacities store)
@@ -142,6 +152,23 @@
 
      ;; --- tehai's own -----------------------------------------------------
      (cond-> []
+      ;; a jurisdiction the client asserted and nobody catalogued is an
+      ;; unanswered question, not a pass — the same rule kintai applies to
+      ;; statutes and 4311 to credit claims.
+      (= :none (:taxlaw/coverage tax))
+      (conj {:rule :unchecked-invoice-jurisdiction
+             :detail (str "client の法域 " (pr-str (:client/jurisdiction client-record))
+                          " は kotoba.taxlaw に無く、この請求書が受領側で控除可能か"
+                          "判定できない（未検査は合格ではない）")})
+
+      (and (= :checked (:taxlaw/coverage tax))
+           (false? (:taxlaw/supported? tax)))
+      (conj {:rule :invoice-not-creditable
+             :detail (str "適格請求書発行事業者の登録番号が無いか不正（"
+                          (name (:taxlaw/reason tax)) "）。この請求書は受領側で"
+                          "仕入税額控除に使えない: "
+                          (pr-str (:issuer-registration-number proposal)))})
+
       (seq unpriced)
       (conj {:rule :unpriced-time
              :detail (str (count unpriced) " 件が rate card 無し。0 でも既定単価でもなく hold")})
@@ -198,7 +225,26 @@
   Returns
   `{:ok? bool :violations [...] :confidence n :hard? bool :escalate? bool}`."
   [request _context proposal store]
-  (gov/verdict {:violations (hard-violations request proposal store)
-                :confidence (:confidence proposal)
-                :escalating-op? (contains? escalating-ops (:op proposal))
-                :confidence-floor confidence-floor}))
+  (let [op (:op proposal)
+        invoicing? (contains? #{:draft-invoice :issue-invoice} op)
+        client-record (store/client store (:client-id request))
+        declared (:client/jurisdiction client-record)]
+    (gov/verdict
+     {:violations (hard-violations request proposal store)
+      :confidence (:confidence proposal)
+      :escalating-op? (contains? escalating-ops op)
+      :confidence-floor confidence-floor
+      ;; A client that declares no jurisdiction is NOT held — it has asserted
+      ;; nothing, and holding every such invoice would stop every existing
+      ;; caller. But it is not silently passed either: `:tax` says the
+      ;; creditability of this invoice was not checked, so a console shows
+      ;; that rather than an unqualified approval. Same device as kintai's
+      ;; `:unevaluated`, and the same reason — a question nobody could
+      ;; answer belongs next to the answer, not inside it.
+      :extra {:tax (cond (not invoicing?) nil
+                         (nil? declared) {:taxlaw/coverage :not-declared
+                                          :taxlaw/why "client declares no jurisdiction"}
+                         :else (taxlaw/credit-support
+                                declared
+                                {:registration-number
+                                 (:issuer-registration-number proposal)}))}})))

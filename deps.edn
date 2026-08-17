@@ -22,7 +22,9 @@
         ;; the itonami actor pattern's governor layer, written once.
         io.github.kotoba-lang/governor
         {:git/url "https://github.com/kotoba-lang/governor.git"
-         :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}}
+         :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}
+        io.github.kotoba-lang/taxlaw
+        {:local/root "../../kotoba-lang/taxlaw"}}
  :aliases
  {;; clj-kondo from deps (no binary), errors fail CI.
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}

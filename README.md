@@ -19,6 +19,36 @@ Domain arithmetic lives in [`kotoba-lang/psa`](https://github.com/kotoba-lang/ps
 — rate cards, proration, margin, utilization, invoice drafting, all pure `.cljc`.
 This repo is the governed shell around it.
 
+## インボイス制度 — the issuing side
+
+`cloud-itonami-isco-4311` checks the **receiving** side (may this journal
+entry claim 仕入税額控除). tehai checks the other half: is the invoice we are
+about to send something its recipient could credit at all? Both read
+[`kotoba-lang/taxlaw`](https://github.com/kotoba-lang/taxlaw), which exists
+because a second actor needed the same law rather than a second copy of it.
+
+The jurisdiction that decides is the **client's**, because the client is who
+would claim the credit — an issuer that could nominate one would nominate a
+jurisdiction it satisfies.
+
+| client declares | invoice carries | verdict |
+|---|---|---|
+| `:jp` | a valid `T`+13 registration number | proceeds |
+| `:jp` | nothing, or a malformed number | HARD `:invoice-not-creditable` |
+| a jurisdiction taxlaw does not cover | anything | HARD `:unchecked-invoice-jurisdiction` |
+| **nothing** | anything | **proceeds, and says it was not checked** |
+
+That last row is the one worth arguing about. A client that declares no
+jurisdiction has asserted nothing, and holding every such invoice would stop
+every existing caller — so it is not held. But it is **not silently passed
+either**: the verdict carries `:tax {:taxlaw/coverage :not-declared}`, so a
+console shows *this was not checked* rather than an unqualified approval.
+Same device as kintai's `:unevaluated`, and the same reason — a question
+nobody could answer belongs next to the answer, not inside it.
+
+**Measured**: dropping that `:tax` key reddens three tests, including one
+that exists solely to assert the not-checked case is visible.
+
 ## The shared governor layer
 
 `:no-client`, `:no-actuation`, `:unknown-project` and `:project-wrong-client`
