@@ -7,14 +7,49 @@
 ;;
 ;; ## SCOPE — this table does not cover the whole repository
 ;;
-;; It covers `tehai.handoff`, the namespace that records what
-;; `cloud-itonami-isco-4311` did with an entry this actor emitted. The
-;; governor, the advisor, the store and `tehai.shiwake` have suites but no
-;; mutations here, so a clean run of this table means "every invariant of
-;; the hand-off is measured" and NOT "every invariant of tehai is measured".
-;; Reading it as the second would be exactly the defect the harness exists
-;; to catch: a check that did not look reporting the same value as one that
-;; looked and found nothing.
+;; COVERED:
+;;   * `tehai.handoff` — every invariant of the hand-off to
+;;     `cloud-itonami-isco-4311` (14 mutations, the original table).
+;;   * `tehai.shiwake` — ONLY the 消費税額等 path added 2026-08-18: where the
+;;     tax figure comes from, whether a derived one is distinguishable from a
+;;     handed-in one, and the four refusals. The rest of that namespace —
+;;     direction of the entry, the account mapping, `:draft-only` vs
+;;     `:not-issued`, the 4311 body shape — has a suite and NO mutations here.
+;;   * `tehai.governor` — ONLY the two things the 2026-08-18 taxlaw pin bump
+;;     changed: that an out-of-scope facet is still a HOLD and now carries its
+;;     reason, and that a pass resting on a prefix-only check says what it did
+;;     not check. The other nine hard invariants (unpriced time, unapproved
+;;     time, double billing, total integrity, fabricated margin, incomplete
+;;     total, over-allocation, provenance) have a suite and NO mutations here.
+;;
+;; NOT COVERED AT ALL: `tehai.advisor`, `tehai.store`, `tehai.actor`,
+;; `tehai.edge.endpoints`.
+;;
+;; So a clean run means "every invariant NAMED ABOVE is measured" and NOT
+;; "every invariant of tehai is measured". Reading it as the second would be
+;; exactly the defect the harness exists to catch: a check that did not look
+;; reporting the same value as one that looked and found nothing.
+;;
+;; ## Survivors found on 2026-08-18, and what was done about them
+;;
+;; The shiwake and governor mutations were written from the SOURCE, before
+;; re-reading the suite. Two of fifteen survived, and both were real gaps:
+;;
+;;   :a-third-clause-is-not-guessed
+;;     `reconciled-total`'s `:else nil` guard was UNREACHABLE through
+;;     `derive-tax` — `kotoba.taxlaw` echoes back only the method it accepted,
+;;     and it accepts two. Fixed by making the function public and measuring
+;;     it directly (`a-grouping-method-this-actor-does-not-know-...`), NOT by
+;;     dropping the guard. A mutation that cannot be reached from any caller
+;;     is a finding about the code's shape, not a reason to delete it.
+;;
+;;   :a-stated-zero-is-not-a-stated-amount
+;;     every assertion about a zero-tax invoice was reading `:tax-treatment`
+;;     — the key that travels to 4311 — and nothing was reading
+;;     `:shiwake/tax-source`, the key this actor tells its own caller. Fixed
+;;     by asserting it (`a-stated-absence-of-tax-travels-as-an-assertion`).
+;;
+;; Nothing was deleted to clean this table.
 [{:id :good-outcome-recorded
   :invariant "a posted entry is recorded as posted, not lost"
   :file "src/tehai/handoff.cljc"
@@ -97,4 +132,102 @@
   :invariant "a reply with no :results is unreadable, not zero entries"
   :file "src/tehai/handoff.cljc"
   :find "(not (sequential? results))"
-  :replace "(and false results)"}]
+  :replace "(and false results)"}
+
+ ;; --------------------------------------------------------------------
+ ;; tehai.shiwake — 消費税額等 per 消費税法施行令 第七十条の十 (2026-08-18)
+ ;; --------------------------------------------------------------------
+
+ {:id :derived-is-not-reported-as-stated
+  :invariant "a figure this actor computed is never reported as one the issuer handed over"
+  :file "src/tehai/shiwake.cljc"
+  :find "{:amount (:amount derived) :source :derived"
+  :replace "{:amount (:amount derived) :source :stated"}
+
+ {:id :corroboration-is-not-collapsed
+  :invariant "stated AND reproduced is a stronger claim than stated, and keeps its own name"
+  :file "src/tehai/shiwake.cljc"
+  :find ":source :stated-and-derived"
+  :replace ":source :stated"}
+
+ {:id :derivation-travels-with-the-result
+  :invariant "a derived figure carries the working, or nobody can recompute it"
+  :file "src/tehai/shiwake.cljc"
+  :find "(assoc :shiwake/tax-derivation (:derivation resolved))"
+  :replace "(assoc :shiwake/no-derivation (:derivation resolved))"}
+
+ {:id :provenance-does-not-enter-the-4311-body
+  :invariant "the emitted request is the shape 4311 already accepts; provenance stays on the result"
+  :file "src/tehai/shiwake.cljc"
+  :find ":tax-treatment (if taxed? :stated :none)"
+  :replace ":tax-treatment (:source resolved)"}
+
+ {:id :two-contradictory-figures-do-not-post
+  :invariant "a stated tax that disagrees with its own basis is refused, not silently picked"
+  :file "src/tehai/shiwake.cljc"
+  :find "(not= (:amount stated) (:amount derived))"
+  :replace "(and false (:amount derived))"}
+
+ {:id :subtotals-must-add-to-the-total
+  :invariant "a basis that computes cleanly against a total it does not describe is refused"
+  :file "src/tehai/shiwake.cljc"
+  :find "          (not= expected total)"
+  :replace "          (and false total)"}
+
+ {:id :tax-inclusive-does-not-add-the-tax-twice
+  :invariant "第二号（税込価額）groups amounts that already contain the tax"
+  :file "src/tehai/shiwake.cljc"
+  :find "    (= :tax-inclusive method) sum"
+  :replace "    (= :tax-inclusive method) (+ sum tax)"}
+
+ {:id :a-third-clause-is-not-guessed
+  :invariant "an unknown grouping method is not reconciled as if it were 税抜"
+  :file "src/tehai/shiwake.cljc"
+  :find "    (= :tax-exclusive method) (+ sum tax)\n    :else nil))"
+  :replace "    (= :tax-exclusive method) (+ sum tax)\n    :else (+ sum tax)))"}
+
+ {:id :an-inapplicable-article-is-its-own-queue
+  :invariant "a basis the article does not apply to is not filed as a contradiction"
+  :file "src/tehai/shiwake.cljc"
+  :find "      {:status :tax-not-derivable"
+  :replace "      {:status :tax-disagrees"}
+
+ {:id :an-unstated-figure-is-a-question-not-a-bug
+  :invariant "a missing tax figure goes to the issuer, a malformed total to whoever produced it"
+  :file "src/tehai/shiwake.cljc"
+  :find "      {:status :tax-not-stated"
+  :replace "      {:status :unusable-invoice"}
+
+ {:id :a-stated-zero-is-not-a-stated-amount
+  :invariant "an invoice asserting no tax component says :none, not that a tax was stated"
+  :file "src/tehai/shiwake.cljc"
+  :find ":source (if (pos? (:amount stated)) :stated :none)"
+  :replace ":source (if (pos? (:amount stated)) :stated :stated)"}
+
+ ;; --------------------------------------------------------------------
+ ;; tehai.governor — what the 2026-08-18 taxlaw pin bump changed
+ ;; --------------------------------------------------------------------
+
+ {:id :an-out-of-scope-facet-is-still-a-hold
+  :invariant "adding a jurisdiction whose invoice facet is out of scope must not widen a pass"
+  :file "src/tehai/governor.cljc"
+  :find "      (= :none (:taxlaw/coverage tax))"
+  :replace "      (= :nope (:taxlaw/coverage tax))"}
+
+ {:id :the-refusal-names-why-there-was-nothing-to-check
+  :invariant "\"nobody read this\" and \"there is no federal VAT to read\" are different facts"
+  :file "src/tehai/governor.cljc"
+  :find "              (:taxlaw/out-of-scope tax)\n              (assoc :out-of-scope"
+  :replace "              (:taxlaw/absent-key tax)\n              (assoc :out-of-scope"}
+
+ {:id :a-prefix-only-pass-says-what-it-did-not-check
+  :invariant "a true from an ISO-3166-prefix check is not a claim the VAT number is valid"
+  :file "src/tehai/governor.cljc"
+  :find "(not-empty (:not-checked (:taxlaw/registration-format tax)))"
+  :replace "(not-empty (:checked (:taxlaw/registration-format tax)))"}
+
+ {:id :only-a-pass-carries-an-unchecked-set
+  :invariant "a refusal qualifies nothing, so it carries no set of things left unchecked"
+  :file "src/tehai/governor.cljc"
+  :find "  (when (true? (:taxlaw/supported? tax))"
+  :replace "  (when (some? (:taxlaw/supported? tax))"}]

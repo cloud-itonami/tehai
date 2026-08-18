@@ -35,6 +35,9 @@ jurisdiction it satisfies.
 |---|---|---|
 | `:jp` | a valid `T`+13 registration number | proceeds |
 | `:jp` | nothing, or a malformed number | HARD `:invoice-not-creditable` |
+| `:eu` | a number with an ISO 3166 alpha-2 prefix | proceeds, **and says what it did not check** |
+| `:eu` | nothing, or something without that prefix | HARD `:invoice-not-creditable` |
+| `:us` | anything | HARD `:unchecked-invoice-jurisdiction`, **and says why** |
 | a jurisdiction taxlaw does not cover | anything | HARD `:unchecked-invoice-jurisdiction` |
 | **nothing** | anything | **proceeds, and says it was not checked** |
 
@@ -49,6 +52,54 @@ nobody could answer belongs next to the answer, not inside it.
 **Measured**: dropping that `:tax` key reddens three tests, including one
 that exists solely to assert the not-checked case is visible.
 
+### Issuing outside Japan (taxlaw pin `d2663b5`, 2026-08-18)
+
+taxlaw gained `[:eu]` and `[:us]`, and with them coverage that is **per facet,
+not per jurisdiction**. That distinction is the whole point: `credit-support`
+used to gate on `covered?`, and `requires-qualified-invoice?` returns nil for a
+facet the catalog lacks — so `(or (not needs?) …)` was `true`, and adding a
+jurisdiction with no invoice rule would have turned a claim there from *held*
+into *approved with no registration number*.
+
+**`[:us]` is that case, and it did not happen.** There is no federal VAT, so
+the input-tax-credit facet is `:out-of-scope`; taxlaw still answers
+`:taxlaw/coverage :none` and this actor still HOLDS, byte-identically to the
+way it holds an invoice into a jurisdiction nobody has read at all. Measured
+against `:atlantis` as the control: same `:ok?`, same `:hard?`, same
+`:escalate?`, same rule set. What is new is only that the violation carries
+`:out-of-scope` and `:why`, so an operator reads *there is no federal VAT*
+instead of *nobody has catalogued this* — which would have been false.
+
+**`[:eu]` is a real widening, and a narrow one.** Article 226 is a closed list
+of required details and (3) is the supplier's VAT identification number, so an
+EU invoice without one is now `:invoice-not-creditable` rather than merely
+unchecked. But Article 215 gives the number's format as an ISO 3166 alpha-2
+prefix (with `EL` for Greece) **and nothing else** — the body is Member State
+law taxlaw has not read. So `"XX1"` passes.
+
+A verdict reporting only `:taxlaw/supported? true` would be read as *the VAT
+number is valid*, which is three claims more than was measured. So a pass that
+rests on a partial check carries `:tax-registration-unchecked`:
+
+```clojure
+#{:member-state-is-a-member :body-format :check-digit}
+```
+
+Absent — not empty — when there is nothing to qualify: on a refusal, on a
+non-invoicing op, and for `[:jp]`, where the catalog declares no breakdown at
+all. An empty set would read as *nothing was left out*, which is a claim
+nobody made.
+
+**Retention is nil for both, and that is the instrument's answer.** Article
+247(1) hands the period to the Member State; 26 CFR § 1.6001-1(e) states a
+condition (*so long as the contents thereof may become material*) and no
+number — the widely-repeated "seven years" appears nowhere in it. This actor
+surfaces **no** retention period in any jurisdiction: the jurisdiction it holds
+is the client's, because the client claims the credit, while how long the
+issuer keeps its own copy is the issuer's law. Answering one with the other is
+worse than silence. The suite pins both halves — that the nils stay nil, and
+that no verdict key claims a period.
+
 ## 仕訳 — an issued invoice becoming a journal entry
 
 Deciding is not bookkeeping. **An invoice that was issued and never became a
@@ -59,8 +110,11 @@ accepts at `POST /api/entry`.
 
 **It produces a value; it does not make a call.** No HTTP, no client, no
 reference to 4311 — and no reference to `tehai.store` or `tehai.actor` either.
-The namespace requires exactly `clojure.string`, asserted by a test that reads
-its own source. Two reasons, and the second carries more weight:
+The namespace requires exactly `clojure.string` and `kotoba.taxlaw`, asserted
+by a test that reads its own source: an allow-list of pure value libraries,
+plus an explicit prohibition on `tehai.store`, `tehai.actor`, `tehai.governor`
+and `kotoba.psa`. It must not be able to look up the ledger, and must not
+price anything. Two reasons, and the second carries more weight:
 
 1. This actor's ceiling is that it proposes. `:issue-invoice` already always
    escalates to a human; reaching past that to write into another actor's
@@ -75,24 +129,83 @@ recognises revenue: 売掛金 debit, 売上 credit — the mirror of `keihi.shiw
 where a claim debits a cost account and credits 未払金. The debit is a
 *receivable* and not cash on purpose: issuing is not collecting.
 
-### 消費税 — split, but only from a figure somebody stated
+### 消費税 — two ways to get a figure, and one that stays refused
 
-`kotoba.psa/invoice` computes no tax at all, so the figure can only come from
-whoever issued the invoice. `:invoice/tax` is therefore **required**:
+`kotoba.psa/invoice` computes no tax at all, so the figure has to come from
+somewhere else. `:invoice/tax`:
 
 | `:invoice/tax` | entry |
 |---|---|
 | a number > 0 | three lines — dr 売掛金 total / cr 売上 (total − tax) / cr 仮受消費税 tax, `:tax-treatment :stated` |
 | `0` or `:none` | two lines, `:tax-treatment :none` — the absence travels as an assertion |
-| absent | **`:tax-not-stated`.** No entry |
+| absent, and no basis | **`:tax-not-stated`.** No entry |
 
-This namespace will not derive a tax amount. Multiplying a total by a rate read
-off a jurisdiction table produces an entry that balances and is wrong, and
+**Still refused, permanently: multiplying a total by a rate read off a
+jurisdiction table.** That produces an entry that balances and is wrong, and
 「we applied 10%」 and 「the issuer told us the tax was ¥24,000」 are not the same
 claim. An unstated figure is unstated, not zero — the same rule the governor
-applies to an uncatalogued jurisdiction. The 適格請求書 question itself is
-already settled upstream: an invoice its recipient could not credit is a HARD
-hold and never reaches `:commit`.
+applies to an uncatalogued jurisdiction.
+
+**Now computed, because it is a different act.** 消費税法施行令 第七十条の十
+leaves the issuer exactly three decisions: which of the two methods (第一号
+税抜価額 / 第二号 税込価額), which way 「端数を処理する」 rounds, and how the
+lines were grouped by rate (「税率の異なるごとに区分して合計した金額」). State
+all three and nothing is left to guess:
+
+```clojure
+:invoice/tax-basis {:jurisdiction :jp          ; the ISSUER's, not the client's
+                    :method       :tax-exclusive
+                    :rounding     :floor
+                    :subtotals    {:standard 240000}}
+```
+
+That goes to `kotoba.taxlaw/consumption-tax-amount` verbatim, which multiplies
+**the per-rate subtotal** once and rounds **that one figure** once. Taxing each
+line and summing is a *third* method and the article offers two — measured: two
+¥1,005 lines give 201 on the subtotal and 200 per line.
+
+Neither the method nor the rounding is defaulted here, because taxlaw refuses
+an unstated one: 「いずれかとする」 and 「端数を処理するものとする」 are both
+choices the article hands the issuer, and a library that picks one is wrong by
+¥1 per rate on every invoice forever. And the grouping is never invented from
+the lines — which rate a supply falls under is the entity's judgement, and
+making it visible is what the 政令's shape is for.
+
+The jurisdiction on the basis is the **issuer's**, and it is deliberately not
+the one the governor used. The governor asks whether the recipient could claim
+a credit, so it reads the *client's*. 施行令 第七十条の十 governs what a
+適格請求書発行事業者 writes on the invoice it issues. Two questions about tax
+that are not the same question. Outside Japan there is nothing here to compute:
+`[:eu]` has no Union-level analogue (Article 226(10) requires the amount to
+appear but fixes no rounding) and `[:us]` has no federal consumption tax — both
+`:tax-not-derivable`, with the catalog's own reason attached.
+
+#### A derived figure and a handed-in one are not the same claim
+
+They produce **identical lines**, so the result says which it is:
+
+| `:shiwake/tax-source` | |
+|---|---|
+| `:stated` | the issuer told us ¥24,000 |
+| `:derived` | we computed ¥24,000 from stated subtotals under a stated method and rounding |
+| `:stated-and-derived` | both, and they agree |
+| `:none` | the issuer stated there is no tax component |
+
+Only the middle two are reproducible, and they carry `:shiwake/tax-derivation`
+— jurisdiction, provision, method, statute clause, rounding, the subtotals as
+given, the per-category figures — which is enough to recompute the number
+without this actor. The suite pins that: it hands the recorded inputs back to
+taxlaw and gets the recorded figure.
+
+**The provenance does not travel to 4311.** The emitted request is
+byte-for-byte the shape it has always been (`#{:op :source-doc :tax-treatment
+:lines}`). This actor cannot change what another actor accepts, and inventing a
+key in a body whose acceptor is *copied* here rather than depended on is
+exactly the failure this repo keeps naming: two green suites and an entry lost
+between them.
+
+The 適格請求書 question itself is already settled upstream: an invoice its
+recipient could not credit is a HARD hold and never reaches `:commit`.
 
 ### Every way the hand-off could lose an invoice is a named status
 
@@ -102,7 +215,15 @@ hold and never reaches `:commit`.
 | `:not-issued` | an issue that was held or is awaiting sign-off — **its own status**, because a caller treating "no entry" as "nothing to do" would skip exactly the ones somebody must look at. Merging it with `:draft-only` would either send an operator to an empty queue or leave a real one unwatched |
 | `:no-mapping` | the client has no 売掛金 account, or the revenue category no 売上 account. No suspense-account fallback: 仮受金 would make the entry appear and the missing decision disappear. A half-filled mapping is no mapping — an entry missing one line balances by having lost it. Only accounts the emitted lines need are demanded, so a zero-tax invoice needs no 仮受消費税 account |
 | `:tax-not-stated` | above. Separate from `:unusable-invoice` because it is a question for the issuer, not a bug in the producer |
+| `:tax-not-derivable` | a `:invoice/tax-basis` 第七十条の十 could not be applied to — usually the method or the rounding is missing, sometimes the jurisdiction has no such article. The issuer must finish the declaration it started |
+| `:tax-basis-unreconciled` | the per-rate subtotals and the invoice total describe different invoices. Under 税抜 the subtotals plus the tax must **be** the total; under 税込 they must be it. A basis that computes cleanly against a total it does not describe is the dangerous one, because the figure it produces looks right |
+| `:tax-disagrees` | the stated figure and what its own basis computes differ. Two figures on one invoice, one wrong, and this actor does not get to pick — posting either would balance |
 | `:unusable-invoice` | no positive total, no id, no currency, or a tax figure that is not a number below the total |
+
+Four tax refusals and not one, because each is a different piece of work and
+three of them are not the issuer's arithmetic. A basis that fails is refused
+**even when a figure was also stated**: ignoring it would let an issuer believe
+its own arithmetic had been checked when it had not.
 
 The invoice id travels as `:source-doc`, so 4311 refuses an entry citing a
 document its own registry does not know — the ledger's registry is the one that

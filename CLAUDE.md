@@ -44,6 +44,33 @@ Propose which entries to bill. Not what they are worth. The governor redrafts th
 invoice from the store's own entries and rate cards and compares totals, so an
 inflated figure is held rather than corrected.
 
+## Tax: the client's law and the issuer's law are different questions
+
+The governor reads the **client's** jurisdiction (the client claims the credit).
+`tehai.shiwake`'s `:invoice/tax-basis` reads the **issuer's** (施行令 第七十条の十
+governs what a 適格請求書発行事業者 writes). Do not merge them.
+
+**Neither the method nor the rounding is ever defaulted.** 第七十条の十 hands
+「いずれかとする」 and 「端数を処理するものとする」 to the issuer; picking one is
+wrong by ¥1 per rate on every invoice, forever. And never group lines into
+per-rate subtotals — which rate a supply falls under is the entity's judgement,
+and the article's shape exists to make that visible.
+
+**A derived figure and a handed-in figure must stay distinguishable.** They
+produce identical lines; only `:shiwake/tax-source` tells them apart, and only
+the derived one is reproducible. Do not collapse the four values.
+
+**Adding a jurisdiction must never widen a pass.** Coverage in `kotoba.taxlaw`
+is per FACET. `requires-qualified-invoice?` returns nil for a facet the catalog
+lacks, and reading nil as "no requirement" is the bug that would approve an
+invoice with no registration number. `[:us]` is that case and it is HELD —
+`test/tehai/non_jp_test.clj` measures it against `:atlantis` as the control, and
+loops over the whole catalog so the NEXT jurisdiction is measured too.
+
+**A prefix check is not validation.** `[:eu]` checks the ISO 3166 prefix and
+nothing else, so `"XX1"` passes. Never report that as "the VAT number is valid"
+— the verdict's `:tax-registration-unchecked` is what must be shown beside it.
+
 ## Store and edge
 
 `MemStore` ≡ `DatomicStore` — same protocol, same contract test; write both

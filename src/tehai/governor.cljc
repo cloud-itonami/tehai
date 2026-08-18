@@ -50,7 +50,73 @@
                              is a refusal to guess.
   ESCALATION invariants (:escalate? true, human sign-off):
    10. :op :issue-invoice  — money leaves the system.
-   11. low confidence (< `confidence-floor`)."
+   11. low confidence (< `confidence-floor`).
+
+  ## Issuing outside Japan — what this actor can and cannot say
+
+  `kotoba.taxlaw` catalogues `[:jp]`, `[:eu]` and `[:us]`, and coverage is
+  per FACET, not per jurisdiction. Being in the catalog says something was
+  read about somewhere; it says nothing about the facet being asked after.
+  So the three answers are three different shapes, and this actor states
+  each one rather than flattening them into `creditable` / `not`.
+
+  ### `[:eu]` — CAN say: a VAT identification number is required, and this
+  one is the wrong shape
+
+  Directive 2006/112/EC Article 226 is a CLOSED list — \"only the following
+  details are required\" — and item (3) is the supplier's VAT identification
+  number. That is a real Union-level analogue of the 適格請求書 registration
+  number, so an EU invoice with no number at all, or with one that is not
+  even shaped like one, is `:invoice-not-creditable` and HELD.
+
+  ### `[:eu]` — CANNOT say: that a VAT number is valid
+
+  Article 215 gives the number's format as an ISO 3166 alpha-2 prefix (with
+  `EL` for Greece) **and nothing else**. The body is Member State law the
+  catalog has not read. So the check is a prefix check: **`\"XX1\"` passes.**
+  `XX` is not a Member State, `1` is not a body, and there is no check digit
+  — and taxlaw says so, naming `:member-state-is-a-member`, `:body-format`
+  and `:check-digit` as NOT checked.
+
+  A verdict that reported only `:taxlaw/supported? true` would be read as
+  \"the VAT number is valid\", which is more than was measured. So the
+  verdict carries `:tax-registration-unchecked` — the set taxlaw declined
+  to check — whenever a pass rests on a partial check. A console that shows
+  an approval must show that set beside it.
+
+  This is a real widening caused by the 2026-08-18 pin bump and it is worth
+  naming: before it, EVERY EU invoice was held as an uncatalogued
+  jurisdiction. Now one with a prefix-shaped number is approved. That is
+  correct — the Directive is what it is — but the approval is narrower than
+  it looks, and `:tax-registration-unchecked` is where the narrowness lives.
+
+  ### `[:us]` — CANNOT say anything about creditability, and says so
+
+  There is no federal VAT or GST, so there is no federal analogue of a
+  qualified invoice. taxlaw marks the facet `:out-of-scope` with that
+  reason and still answers `:taxlaw/coverage :none`, so this actor holds a
+  US invoice with `:unchecked-invoice-jurisdiction` **exactly as hard as it
+  did before the United States was catalogued at all**. Adding a
+  jurisdiction must not widen a pass, and this is the case that would have.
+
+  What changed is only that the refusal can now be explained: the violation
+  carries `:out-of-scope` and `:why`, so an operator reads \"there is no
+  federal VAT\" rather than \"nobody has catalogued this\" — which would
+  have been false.
+
+  ### Retention: nil is the answer, not a gap — and not this actor's
+
+  `taxlaw/retention-years` is nil for both `[:eu]` and `[:us]`, and in both
+  cases that IS the instrument's answer. Article 247(1) says \"Each Member
+  State shall determine the period\"; 26 CFR § 1.6001-1(e) says records are
+  kept \"so long as the contents thereof may become material\" and states no
+  number at all — the widely-repeated seven years appears nowhere in it.
+
+  This actor deliberately surfaces **no** retention period. The jurisdiction
+  it holds is the CLIENT's, because the client is who would claim the
+  credit; how long the ISSUER must keep its own copy is the issuer's law,
+  and answering one with the other would be worse than silence. What the
+  suite does pin is that nobody later turns those nils into integers."
   (:require [kotoba.psa :as psa]
             [tehai.store :as store]
             [kotoba.taxlaw :as taxlaw]
@@ -155,11 +221,29 @@
       ;; a jurisdiction the client asserted and nobody catalogued is an
       ;; unanswered question, not a pass — the same rule kintai applies to
       ;; statutes and 4311 to credit claims.
+      ;; The reason divides in two and the DETAIL must not merge them, even
+      ;; though the rule and the disposition deliberately do. A jurisdiction
+      ;; nobody catalogued and a jurisdiction whose invoice facet was
+      ;; considered and left out are both `:none` and both HELD — taxlaw
+      ;; keeps them the same value on purpose, so no consumer's behaviour
+      ;; changes when a jurisdiction is added. But "nobody has read this"
+      ;; and "there is no federal VAT to read" call for different work, and
+      ;; an operator told the first about the United States has been told
+      ;; something false.
       (= :none (:taxlaw/coverage tax))
-      (conj {:rule :unchecked-invoice-jurisdiction
-             :detail (str "client の法域 " (pr-str (:client/jurisdiction client-record))
-                          " は kotoba.taxlaw に無く、この請求書が受領側で控除可能か"
-                          "判定できない（未検査は合格ではない）")})
+      (conj (cond-> {:rule :unchecked-invoice-jurisdiction
+                     :detail
+                     (if-let [why (:taxlaw/why tax)]
+                       (str "client の法域 " (pr-str (:client/jurisdiction client-record))
+                            " について kotoba.taxlaw は仕入税額控除の facet を意図的に"
+                            "持たない（" why "）。この請求書が受領側で控除可能か判定"
+                            "できないことは変わらず、hold のまま")
+                       (str "client の法域 " (pr-str (:client/jurisdiction client-record))
+                            " は kotoba.taxlaw に無く、この請求書が受領側で控除可能か"
+                            "判定できない（未検査は合格ではない）"))}
+              (:taxlaw/out-of-scope tax)
+              (assoc :out-of-scope (:taxlaw/out-of-scope tax)
+                     :why (:taxlaw/why tax))))
 
       (and (= :checked (:taxlaw/coverage tax))
            (false? (:taxlaw/supported? tax)))
@@ -219,16 +303,51 @@
                           (:allocation/committed-hours alloc) "h 割当だが capacity は "
                           (:allocation/capacity-hours alloc) "h")})))))
 
+(defn registration-unchecked
+  "What a `true` from this tax answer did NOT establish, or nil.
+
+  `credit-support` returns `:taxlaw/supported? true` when the registration
+  number satisfies everything the catalog can check **in that
+  jurisdiction**, and in the EU that is the ISO 3166 alpha-2 prefix and
+  nothing else — Article 215 gives the prefix, and the body is Member State
+  law taxlaw has not read. `\"XX1\"` therefore passes. Reporting that as
+  \"the VAT number is valid\" claims three things nobody measured.
+
+  So: the set taxlaw declared unchecked, whenever the answer was a PASS
+  that rests on a partial check. nil otherwise, and the two nils mean
+  different things:
+
+    a refusal          nothing was passed, so there is nothing to qualify
+    `[:jp]`            the catalog declares no breakdown at all. That is
+                       NOT a claim that the check was complete — it is the
+                       absence of a claim either way, and it is reported as
+                       today's shape rather than as an empty set, because
+                       an empty set reads as `nothing was left out`.
+
+  A non-empty set on an approved invoice is the thing a console must show
+  next to the approval."
+  [tax]
+  (when (true? (:taxlaw/supported? tax))
+    (not-empty (:not-checked (:taxlaw/registration-format tax)))))
+
 (defn check
   "Assess a proposal against `request`/`context`/`proposal` and a `store`
   implementing `tehai.store/Store`. Pure — never mutates the store.
   Returns
-  `{:ok? bool :violations [...] :confidence n :hard? bool :escalate? bool}`."
+  `{:ok? bool :violations [...] :confidence n :hard? bool :escalate? bool}`,
+  plus `:tax` and `:tax-registration-unchecked` on invoicing ops (see the
+  namespace docstring's non-Japan section)."
   [request _context proposal store]
   (let [op (:op proposal)
         invoicing? (contains? #{:draft-invoice :issue-invoice} op)
         client-record (store/client store (:client-id request))
-        declared (:client/jurisdiction client-record)]
+        declared (:client/jurisdiction client-record)
+        tax (cond (not invoicing?) nil
+                  (nil? declared) {:taxlaw/coverage :not-declared
+                                   :taxlaw/why "client declares no jurisdiction"}
+                  :else (taxlaw/credit-support
+                         declared
+                         {:registration-number (:issuer-registration-number proposal)}))]
     (gov/verdict
      {:violations (hard-violations request proposal store)
       :confidence (:confidence proposal)
@@ -241,10 +360,9 @@
       ;; that rather than an unqualified approval. Same device as kintai's
       ;; `:unevaluated`, and the same reason — a question nobody could
       ;; answer belongs next to the answer, not inside it.
-      :extra {:tax (cond (not invoicing?) nil
-                         (nil? declared) {:taxlaw/coverage :not-declared
-                                          :taxlaw/why "client declares no jurisdiction"}
-                         :else (taxlaw/credit-support
-                                declared
-                                {:registration-number
-                                 (:issuer-registration-number proposal)}))}})))
+      :extra (cond-> {:tax tax}
+               ;; Only present when a PASS rests on a partial check. Absent
+               ;; when there is nothing to qualify, so a caller cannot read
+               ;; an empty set as `nothing was left out`.
+               (registration-unchecked tax)
+               (assoc :tax-registration-unchecked (registration-unchecked tax)))})))
