@@ -27,7 +27,7 @@
          :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}
         io.github.kotoba-lang/taxlaw
         {:git/url "https://github.com/kotoba-lang/taxlaw.git"
-         :git/sha "718b09ea4fd608dc3a12d0baaa095588046a2e5c"}}
+         :git/sha "d2663b54aad645244e61ae548054943b1229c1fc"}}
  :aliases
  {;; clj-kondo from deps (no binary), errors fail CI.
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
