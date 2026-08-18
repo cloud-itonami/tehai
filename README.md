@@ -49,6 +49,81 @@ nobody could answer belongs next to the answer, not inside it.
 **Measured**: dropping that `:tax` key reddens three tests, including one
 that exists solely to assert the not-checked case is visible.
 
+## 仕訳 — an issued invoice becoming a journal entry
+
+Deciding is not bookkeeping. **An invoice that was issued and never became a
+journal entry is revenue nobody's books show.** `tehai.shiwake/entry-request`
+turns a committed `:issue-invoice` run into the `:draft-entry` request
+[`cloud-itonami-isco-4311`](https://github.com/cloud-itonami/cloud-itonami-isco-4311)
+accepts at `POST /api/entry`.
+
+**It produces a value; it does not make a call.** No HTTP, no client, no
+reference to 4311 — and no reference to `tehai.store` or `tehai.actor` either.
+The namespace requires exactly `clojure.string`, asserted by a test that reads
+its own source. Two reasons, and the second carries more weight:
+
+1. This actor's ceiling is that it proposes. `:issue-invoice` already always
+   escalates to a human; reaching past that to write into another actor's
+   ledger would be the actuation the whole design refuses.
+2. **A call would make the accounts this actor's business, and they are not.**
+   Which account a consulting fee credits is the client's chart, and
+   `kotoba-lang/shohyo` refuses to guess what an account is precisely because a
+   statement that guessed still balances. So the mapping is an argument.
+
+**Direction is the other way round from an expense.** An issued invoice
+recognises revenue: 売掛金 debit, 売上 credit — the mirror of `keihi.shiwake`,
+where a claim debits a cost account and credits 未払金. The debit is a
+*receivable* and not cash on purpose: issuing is not collecting.
+
+### 消費税 — split, but only from a figure somebody stated
+
+`kotoba.psa/invoice` computes no tax at all, so the figure can only come from
+whoever issued the invoice. `:invoice/tax` is therefore **required**:
+
+| `:invoice/tax` | entry |
+|---|---|
+| a number > 0 | three lines — dr 売掛金 total / cr 売上 (total − tax) / cr 仮受消費税 tax, `:tax-treatment :stated` |
+| `0` or `:none` | two lines, `:tax-treatment :none` — the absence travels as an assertion |
+| absent | **`:tax-not-stated`.** No entry |
+
+This namespace will not derive a tax amount. Multiplying a total by a rate read
+off a jurisdiction table produces an entry that balances and is wrong, and
+「we applied 10%」 and 「the issuer told us the tax was ¥24,000」 are not the same
+claim. An unstated figure is unstated, not zero — the same rule the governor
+applies to an uncatalogued jurisdiction. The 適格請求書 question itself is
+already settled upstream: an invoice its recipient could not credit is a HARD
+hold and never reaches `:commit`.
+
+### Every way the hand-off could lose an invoice is a named status
+
+| | |
+|---|---|
+| `:draft-only` | a committed `:draft-invoice` (or any non-issuing op). No receivable exists and nobody has to act |
+| `:not-issued` | an issue that was held or is awaiting sign-off — **its own status**, because a caller treating "no entry" as "nothing to do" would skip exactly the ones somebody must look at. Merging it with `:draft-only` would either send an operator to an empty queue or leave a real one unwatched |
+| `:no-mapping` | the client has no 売掛金 account, or the revenue category no 売上 account. No suspense-account fallback: 仮受金 would make the entry appear and the missing decision disappear. A half-filled mapping is no mapping — an entry missing one line balances by having lost it. Only accounts the emitted lines need are demanded, so a zero-tax invoice needs no 仮受消費税 account |
+| `:tax-not-stated` | above. Separate from `:unusable-invoice` because it is a question for the issuer, not a bug in the producer |
+| `:unusable-invoice` | no positive total, no id, no currency, or a tax figure that is not a number below the total |
+
+The invoice id travels as `:source-doc`, so 4311 refuses an entry citing a
+document its own registry does not know — the ledger's registry is the one that
+counts. The emitted body **never carries `:client-id`**: 4311 rejects a body
+naming a client (400) rather than ignoring it, because the caller's client is
+derived there from the verified DID.
+
+`entry-requests` returns `{:ok [...] :skipped [...]}` rather than filtering, and
+each refusal carries the invoice it refused.
+
+**Measured**, all 15 mutations red: emit for a held invoice (2 tests), emit for
+a draft (2), suspense-account fallback (2), drop the tax line (3), credit the
+whole total to 売上 (3), treat an unstated tax as zero (2), invent a 10% rate
+(2), flip the direction (3), batch discards its skips (1), refusal drops the
+invoice (1), drop the source document (2), name the client in the body (2),
+accept a non-positive total (1), tolerate a half-filled mapping (2), drop the
+currency requirement (1). The non-positive-total mutation was **green on the
+first pass** — every taxed case was caught downstream by `tax >= total`, so a
+zero-amount entry would have gone out balanced; the suite now states the total
+check with the tax stated as `:none`.
+
 ## The shared governor layer
 
 `:no-client`, `:no-actuation`, `:unknown-project` and `:project-wrong-client`
