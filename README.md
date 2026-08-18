@@ -124,6 +124,62 @@ first pass** — every taxed case was caught downstream by `tax >= total`, so a
 zero-amount entry would have gone out balanced; the suite now states the total
 check with the tax stated as `:none`.
 
+## 受領確認 — what the ledger did with the entry
+
+Converting is not posting. `tehai.shiwake` produces the request; **nothing
+recorded what happened to it.** 4311 can commit the entry, find it already
+there, hold it against a rule, park it for a human, or refuse the body — and
+from this side all five arrived as a value nobody wrote down. An invoice that
+was issued, converted, submitted and *refused* is revenue nobody's books show,
+and it was indistinguishable from one that posted.
+
+`tehai.handoff/fact` turns one reply into a ledger fact the actor appends with
+the `tehai.store/append-ledger!` it already has — no new store call, no new
+schema, beside the graph's own `:commit` and `:hold` facts.
+
+| reply | `:handoff/outcome` |
+|---|---|
+| 200, `:duplicate? false` | `:posted` |
+| 200, `:duplicate? true` | `:duplicate` — **not** `:posted`. One call wrote the posting; the other found it already there, and to whoever reconciles those are different events |
+| 202 | `:awaiting-approval`, with the escalation reason |
+| 409 | `:held`, with the violations |
+| 400 | `:rejected` — the body this actor emitted |
+| 403 | `:not-permitted` — who it authenticated as |
+| 503 | `:unavailable` — a ledger deployment with no store or allow-list |
+| anything else, a body that is not a map, or a 200 that does not say whether it duplicated | `:unreadable`, carrying the whole response |
+
+400/403/503 stay three answers where 4311's own batch collapses them to
+`:rejected`, because they send a reader to three different places — the same
+argument that actor makes about its own 503. **The good outcome is recorded
+too**: a ledger holding only refusals cannot answer 「これは計上されたか」,
+which is the one question the hand-off exists to close.
+
+Every fact names the invoice, the client and 4311's posting id, so it joins
+back to what it reconciles. `:handoff/posting` is present even when nil.
+
+**It produces a value; it does not make a call** — it is handed a reply
+somebody else obtained. Requires exactly `clojure.string`, asserted by a test
+that reads its own source.
+
+`handoff/facts` does the 207 batch. Results are joined to entries **by
+position only**, so a length mismatch is refused rather than zipped: one
+missing result misattributes every outcome after it while the entries that
+fall off the end get none at all. A result echoing a different `:source-doc`
+is `:misattributed` for the same reason. **A refused batch still returns one
+fact** — returning none would mean a caller looping over them wrote nothing,
+and a failed hand-off would look exactly like one nobody attempted, which is
+the defect this namespace exists to remove.
+
+**Measured**, `nbb tools/mutate.cljs`: 14 mutations, 14 killed, 0 survivors, 0
+unmeasured. One was a **survivor** on the first pass of 13: making the status
+check on an unsubmitted conversion unconditional reddened nothing, because
+every refusal `shiwake` itself emits also lacks a source document and was
+caught by the second guard. The suite now states it with a refusal carrying a
+leftover request — the status is what says whether something was submitted,
+not the presence of a request-shaped map — and the batch side of the same
+guard got its own mutation, which is the fourteenth. That table
+covers `tehai.handoff` and nothing else, and says so in its own header.
+
 ## The shared governor layer
 
 `:no-client`, `:no-actuation`, `:unknown-project` and `:project-wrong-client`

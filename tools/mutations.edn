@@ -1,0 +1,100 @@
+;; One mutation per invariant. `:find` must occur EXACTLY ONCE in `:file` —
+;; `tools/mutate.cljs` refuses otherwise, because a mutation that landed in a
+;; comment or in a second call site produces a red suite that proves nothing.
+;;
+;; Read the pair before trusting a red: the thing broken and the thing
+;; reported must be the same thing.
+;;
+;; ## SCOPE — this table does not cover the whole repository
+;;
+;; It covers `tehai.handoff`, the namespace that records what
+;; `cloud-itonami-isco-4311` did with an entry this actor emitted. The
+;; governor, the advisor, the store and `tehai.shiwake` have suites but no
+;; mutations here, so a clean run of this table means "every invariant of
+;; the hand-off is measured" and NOT "every invariant of tehai is measured".
+;; Reading it as the second would be exactly the defect the harness exists
+;; to catch: a check that did not look reporting the same value as one that
+;; looked and found nothing.
+[{:id :good-outcome-recorded
+  :invariant "a posted entry is recorded as posted, not lost"
+  :file "src/tehai/handoff.cljc"
+  :find "(not (true? (:ok body))) :unreadable"
+  :replace "(not (false? (:ok body))) :unreadable"}
+
+ {:id :duplicate-is-not-posted
+  :invariant "a duplicate is its own outcome; one wrote, one confirmed"
+  :file "src/tehai/handoff.cljc"
+  :find "(true? (:duplicate? body)) :duplicate"
+  :replace "(true? (:duplicate? body)) :posted"}
+
+ {:id :silent-200-is-not-a-post
+  :invariant "a 200 that does not say whether it duplicated is unreadable"
+  :file "src/tehai/handoff.cljc"
+  :find "(false? (:duplicate? body)) :posted"
+  :replace ":else :posted"}
+
+ {:id :unknown-status-is-not-a-success
+  :invariant "a status nobody here knows never becomes a success"
+  :file "src/tehai/handoff.cljc"
+  :find "      503 :unavailable\n      :unreadable)))"
+  :replace "      503 :unavailable\n      :posted)))"}
+
+ {:id :unreadable-carries-the-response
+  :invariant "an unreadable reply keeps enough of itself to be diagnosed"
+  :file "src/tehai/handoff.cljc"
+  :find "(= :unreadable outcome) (assoc :handoff/response response\n                                   :handoff/raw-status status)"
+  :replace "(= :unreadable outcome) (assoc :handoff/raw-status status)"}
+
+ {:id :fact-names-the-invoice
+  :invariant "the fact can be joined back to the invoice it is about"
+  :file "src/tehai/handoff.cljc"
+  :find "{:handoff/invoice (get-in converted [:shiwake/request :source-doc])"
+  :replace "{:handoff/invoice (get-in converted [:shiwake/request :not-a-key])"}
+
+ {:id :posting-key-always-present
+  :invariant "4311's posting id is reported even when there is none"
+  :file "src/tehai/handoff.cljc"
+  :find ":handoff/posting (when (map? body) (:posting body))}"
+  :replace ":handoff/no-posting (when (map? body) (:posting body))}"}
+
+ {:id :unsubmitted-is-not-scored
+  :invariant "a reply is never attributed to an entry nobody sent"
+  :file "src/tehai/handoff.cljc"
+  :find "      (not= :ok (:shiwake/status converted))\n      (not-submitted converted response"
+  :replace "      (and false (:shiwake/status converted))\n      (not-submitted converted response"}
+
+ {:id :unsubmitted-is-not-scored-in-a-batch
+  :invariant "a batch result is never attributed to an entry nobody sent"
+  :file "src/tehai/handoff.cljc"
+  :find "      (or (not= :ok (:shiwake/status converted)) (absent? invoice))"
+  :replace "      (or (and false (:shiwake/status converted)) (absent? invoice))"}
+
+ {:id :length-mismatch-refused
+  :invariant "a batch whose counts differ is refused, not zipped"
+  :file "src/tehai/handoff.cljc"
+  :find "      (not= (count converted) (count results))"
+  :replace "      (and false (count results))"}
+
+ {:id :refusal-is-itself-a-fact
+  :invariant "a refused batch still yields one fact to append"
+  :file "src/tehai/handoff.cljc"
+  :find ":handoff/facts [f]"
+  :replace ":handoff/facts []"}
+
+ {:id :misattribution-refused
+  :invariant "a result citing another document is not attributed here"
+  :file "src/tehai/handoff.cljc"
+  :find "(and (some? echoed) (not= echoed invoice))"
+  :replace "(and false (not= echoed invoice))"}
+
+ {:id :batch-status-and-outcome-must-agree
+  :invariant "a batch result's status and 4311's own label must agree"
+  :file "src/tehai/handoff.cljc"
+  :find "(if (and permitted (contains? permitted outcome))"
+  :replace "(if (or permitted (contains? permitted outcome))"}
+
+ {:id :missing-results-is-not-an-empty-batch
+  :invariant "a reply with no :results is unreadable, not zero entries"
+  :file "src/tehai/handoff.cljc"
+  :find "(not (sequential? results))"
+  :replace "(and false results)"}]
