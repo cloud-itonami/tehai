@@ -15,7 +15,7 @@
   3. nothing unreadable is ever scored as a success;
   4. a batch whose results cannot be paired to its entries is refused
      rather than zipped."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.text] [clojure.test :refer [deftest is testing]]
             [tehai.handoff :as handoff]
             [tehai.shiwake :as shiwake]
             [tehai.store :as store]))
@@ -354,5 +354,5 @@
                     (filter list?)
                     (filter #(= :require (first %)))
                     first rest (map first) set)]
-      (is (= #{'clojure.string} reqs)
+      (is (= #{'kotoba.lang.text} reqs)
           (str "handoff must stay a pure value function; requires " (pr-str reqs))))))

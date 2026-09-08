@@ -120,7 +120,7 @@
   ## Every way the hand-off can lose an invoice is a named status
 
   Never nil, and never a suspense account. See `entry-request`."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba.taxlaw :as taxlaw]))
 
 (defn- positive-amount? [x] (and (number? x) (pos? x)))

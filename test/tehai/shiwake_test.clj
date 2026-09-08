@@ -7,7 +7,7 @@
   that 消費税 is split out only from a figure somebody stated, and that the
   emitted body never names a client — `cloud-itonami-isco-4311` REJECTS a
   body carrying `:client-id` rather than ignoring it."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.text] [clojure.test :refer [deftest is testing]]
             [clojure.set :as set]
             [kotoba.taxlaw :as taxlaw]
             [tehai.shiwake :as shiwake]))
@@ -252,7 +252,7 @@
   (testing "and it reads nothing that could tell it about THIS engagement —
             no store, no actor, no governor, no psa.
 
-            CHANGED 2026-08-18, from `(= #{clojure.string} reqs)`. That
+            CHANGED 2026-08-18, from `(= #{kotoba.lang.text} reqs)`. That
             assertion was an exact set standing in for a prohibition its own
             `testing` string states as `no store, no actor, no psa`, and
             adding `kotoba.taxlaw` — a pure, dependency-free statute catalog
@@ -269,7 +269,7 @@
           ;; decision, not a formality: a namespace that can look something
           ;; up can be wrong about this engagement in particular, and that
           ;; is the class this test exists to keep out.
-          allowed '#{clojure.string kotoba.taxlaw}]
+          allowed '#{kotoba.lang.text kotoba.taxlaw}]
       (is (empty? (set/difference reqs allowed))
           (str "shiwake must stay a pure value function; requires "
                (pr-str reqs)))
