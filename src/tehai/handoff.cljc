@@ -51,7 +51,7 @@
   both sides of the hand-off), the client, and 4311's posting id where
   there is one. A reconciliation record that cannot be joined to the thing
   it reconciles is not one."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def outcomes
   "Every value `:handoff/outcome` can take. Named as a set so a reader can

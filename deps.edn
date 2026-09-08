@@ -1,5 +1,10 @@
 {:paths ["src"]
- :deps {io.github.kotoba-lang/langgraph
+ :deps {
+        ;; kotoba.lang.text, not clojure.string. Pinned as an explicit floor:
+        ;; tools.deps takes the NEWEST sha it is shown, so without a floor here
+        ;; this repo silently rides whatever a sibling happens to name.
+        io.github.kotoba-lang/text {:git/sha "73bdb13ae7a3d004b44bca08be03a3191157a38f"}
+       io.github.kotoba-lang/langgraph
         {:git/sha "5b4e5e70837b849b14b6a5800894e3be202ad5fa"}
         ;; kotoba-lang/psa is this vertical's domain capability library
         ;; (rate cards, staffing against capacity, margin, utilization,
