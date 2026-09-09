@@ -72,7 +72,7 @@
   (:require ["node:child_process" :as cp]
             ["node:fs" :as fs]
             [clojure.edn :as edn]
-            [clojure.string :as str]))
+            [kotoba.lang.text :as str]))
 
 (defn- orig-path [file] (str file ".orig"))
 
