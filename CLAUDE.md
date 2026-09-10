@@ -64,7 +64,7 @@ the derived one is reproducible. Do not collapse the four values.
 is per FACET. `requires-qualified-invoice?` returns nil for a facet the catalog
 lacks, and reading nil as "no requirement" is the bug that would approve an
 invoice with no registration number. `[:us]` is that case and it is HELD —
-`test/tehai/non_jp_test.clj` measures it against `:atlantis` as the control, and
+`test/tehai/non_jp_test.kotoba` measures it against `:atlantis` as the control, and
 loops over the whole catalog so the NEXT jurisdiction is measured too.
 
 **A prefix check is not validation.** `[:eu]` checks the ISO 3166 prefix and
