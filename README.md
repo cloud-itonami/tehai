@@ -291,7 +291,7 @@ fact** — returning none would mean a caller looping over them wrote nothing,
 and a failed hand-off would look exactly like one nobody attempted, which is
 the defect this namespace exists to remove.
 
-**Measured**, `nbb tools/mutate.cljs`: 14 mutations, 14 killed, 0 survivors, 0
+**Measured**, `nbb tools/mutate.kotoba`: 14 mutations, 14 killed, 0 survivors, 0
 unmeasured. One was a **survivor** on the first pass of 13: making the status
 check on an unsubmitted conversion unconditional reddened nothing, because
 every refusal `shiwake` itself emits also lacks a source document and was
@@ -312,7 +312,7 @@ with the verdict assembly. `:project-wrong-client` uses that library's
 `:scope-key`, because a psa project carries ownership as `:project/client`
 while the request carries `:client-id`.
 
-`test/tehai/conformance_test.clj` pins every disposition against
+`test/tehai/conformance_test.kotoba` pins every disposition against
 `gov/conformance-failures`. Unlike its sibling actors, tehai's existing
 suite **already** caught the drift in two tests
 (`a-hard-violation-outranks-escalation`,
