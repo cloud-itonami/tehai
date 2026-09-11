@@ -18,8 +18,8 @@ Three invariants come from `kotoba-lang/psa` and are load-bearing here:
 Before opening a PR:
 
 ```bash
-clojure -M:lint
-clojure -M:test
+kbb -M:lint
+kbb -M:test
 ```
 
 `GOVERNANCE.md` lists the rules that are not up for discussion.

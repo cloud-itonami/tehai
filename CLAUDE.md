@@ -84,4 +84,4 @@ returning `:no-worker` and blaming the caller for a storeless deployment.
 
 ## Test
 
-    clojure -M:test && clojure -M:lint
+    kbb -M:test && kbb -M:lint

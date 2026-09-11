@@ -2,15 +2,15 @@
   "Prove the suite can fail.
 
   A test that has never gone red is a test nobody has measured. This applies
-  one single-token mutation to one source file, runs `clojure -M:test`, and
+  one single-token mutation to one source file, runs `kbb -M:test`, and
   records which tests reddened — then restores the file. A mutation that
   reddens NOTHING is reported as a SURVIVOR, which is a finding about the
   suite, not about the mutation.
 
   Usage (from the repo root):
 
-      nbb tools/mutate.cljs             # every mutation in the table
-      nbb tools/mutate.cljs :duplicate  # one, by id
+      kbb --backend sci tools/mutate.cljk             # every mutation in the table
+      kbb --backend sci tools/mutate.cljk :duplicate  # one, by id
 
   The table lives in `tools/mutations.edn`. Each entry names the invariant,
   the file, an EXACT substring to find (it must occur exactly once — a
@@ -46,7 +46,7 @@
 
   ## Why a signal handler alone would not have been enough
 
-  Measured, not assumed. `clojure -M:test` runs under `execSync`, which
+  Measured, not assumed. `kbb -M:test` runs under `execSync`, which
   blocks the JS thread, and this whole script is synchronous top to bottom.
   A signal arriving mid-suite is queued by libuv but its JS callback CANNOT
   RUN until the stack unwinds to the event loop — which here never happens,
@@ -176,7 +176,7 @@
 
 (defn- run-tests []
   (try
-    (let [out (.toString (cp/execSync "clojure -M:test 2>&1"))]
+    (let [out (.toString (cp/execSync "kbb -M:test 2>&1"))]
       {:exit 0 :out out})
     (catch :default e
       ;; `:signal` is the name of the signal that KILLED THE CHILD, or nil if
