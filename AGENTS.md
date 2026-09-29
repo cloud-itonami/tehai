@@ -1,4 +1,4 @@
-# CLAUDE.md — cloud-itonami/tehai 手配
+# AGENTS.md — cloud-itonami/tehai 手配
 
 Professional-services actor. itonami pattern: advisor ⊣ independent governor ⊣
 append-only ledger. Money arithmetic is `kotoba-lang/psa`; this repo is the
