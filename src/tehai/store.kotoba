@@ -2,7 +2,7 @@
   "SSoT for the tehai (手配) professional-services actor. Store is a
   protocol injected into the `tehai.actor` StateGraph — `MemStore` is the
   default, deterministic, zero-dep backend (itonami actor pattern,
-  ADR-2607011000 / CLAUDE.md Actors section). Modeled on
+  ADR-2607011000 / AGENTS.md Actors section). Modeled on
   cloud-itonami-isco-4313's payroll.store; the PSA-domain records use
   `kotoba.psa`'s shapes verbatim — this actor CONSUMES kotoba-lang/psa,
   it does not reinvent rate lookup, proration or invoice arithmetic.

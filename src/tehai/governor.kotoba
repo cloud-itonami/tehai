@@ -1,7 +1,7 @@
 (ns tehai.governor
   "TehaiGovernor — the independent safety/traceability layer for the
   tehai (手配) professional-services actor (itonami actor pattern,
-  ADR-2607011000 / CLAUDE.md Actors section). Modeled on
+  ADR-2607011000 / AGENTS.md Actors section). Modeled on
   cloud-itonami-isco-4313's payroll.governor, with the PSA-specific
   twist that the governor REDRAFTS the invoice deterministically via
   `kotoba.psa` — the advisor's arithmetic is never trusted, and neither

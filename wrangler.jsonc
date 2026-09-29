@@ -20,7 +20,7 @@
     // Unset is the default ON PURPOSE. An empty in-process store would fail
     // the governor's registration check and return 409 :no-worker, blaming
     // the caller for a deployment that has no store at all. A durable
-    // backend is not wired yet; see the repo's CLAUDE.md.
+    // backend is not wired yet; see the repo's AGENTS.md.
     "TEHAI_STORE": ""
   }
 }
