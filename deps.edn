@@ -3,9 +3,14 @@
         ;; kotoba.lang.text, not clojure.string. Pinned as an explicit floor:
         ;; tools.deps takes the NEWEST sha it is shown, so without a floor here
         ;; this repo silently rides whatever a sibling happens to name.
-        io.github.kotoba-lang/text {:git/sha "73bdb13ae7a3d004b44bca08be03a3191157a38f"}
+        io.github.kotoba-lang/text
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/kotoba.text"}
        io.github.kotoba-lang/langgraph
-        {:git/sha "5b4e5e70837b849b14b6a5800894e3be202ad5fa"}
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/kotoba.langgraph"}
         ;; kotoba-lang/psa is this vertical's domain capability library
         ;; (rate cards, staffing against capacity, margin, utilization,
         ;; invoice drafting). Referenced by workspace-sibling path per the
@@ -14,25 +19,30 @@
         ;; dependency-free, so it is also consumable as a plain git dep
         ;; once a fork wants one.
         io.github.kotoba-lang/psa
-        {:git/url "https://github.com/kotoba-lang/psa.git"
-         :git/sha "f9c96f337abd45ee025d58d6549d985c32fd1dfa"}
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/kotoba.psa"}
         ;; shared langchain.db store seam (EDN-blob codec + identity
         ;; schema + seq-keyed event streams) — ADR-2607141600.
         io.github.kotoba-lang/langchain-store
-        {:git/url "https://github.com/kotoba-lang/langchain-store.git"
-         :git/sha "b986669f72276568c97e1fa5b331a5ff3017bf69"}
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/kotoba.langchainStore"}
         ;; CACAO verification for the edge. Depended on, never
         ;; reimplemented (ADR-2607268000).
         io.github.kotoba-lang/org-chainagnostic-cacao
-        {:git/url "https://github.com/kotoba-lang/org-chainagnostic-cacao.git"
-         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/org.chainagnostic.cacao"}
         ;; the itonami actor pattern's governor layer, written once.
         io.github.kotoba-lang/governor
-        {:git/url "https://github.com/kotoba-lang/governor.git"
-         :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/kotoba.governor"}
         io.github.kotoba-lang/taxlaw
-        {:git/url "https://github.com/kotoba-lang/taxlaw.git"
-         :git/sha "d2663b54aad645244e61ae548054943b1229c1fc"}}
+        {:git/url "https://github.com/kotoba-lang/kotoba.git"
+         :git/sha "7e1dbe0aece831138e6106c59d2b26375d0f60c4"
+         :deps/root "lib/kotoba.taxlaw"}}
  :aliases
  {;; clj-kondo from deps (no binary), errors fail CI.
   :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
