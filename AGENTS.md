@@ -1,7 +1,7 @@
 # AGENTS.md — cloud-itonami/tehai 手配
 
 Professional-services actor. itonami pattern: advisor ⊣ independent governor ⊣
-append-only ledger. Money arithmetic is `kotoba-lang/psa`; this repo is the
+append-only ledger. Money arithmetic is `kotoba-lang/psa` (now `lib/kotoba.psa` in `kotoba-lang/kotoba`; the old repository is retired); this repo is the
 governed shell.
 
 ## Rules that are not negotiable
